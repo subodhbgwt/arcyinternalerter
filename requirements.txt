@@ -1,0 +1,7 @@
+aiohttp>=3.9
+python-dotenv>=1.0
+
+# Optional — only needed if you want `--browser` mode (experimental).
+# Install separately:
+#   pip install playwright
+#   python -m playwright install chromium
