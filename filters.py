@@ -1,20 +1,23 @@
-"""Filter logic.
+"""Filter logic — retargeted for Subodh's search.
 
 Acceptance rule (applied in `passes`):
 
-    job is technical / product-management / SWE / engineering
-    AND NOT HR / admin / recruiter / legal / finance / office
-    AND located in India (any state / union territory)
+    role is one of Subodh's tracks:
+        quant / trading  OR  software / tech  OR  IB / finance  OR  consulting
+    AND NOT HR / admin / recruiter / legal / sales / marketing / support / design
+    AND located in a TARGET region
+        (Sweden + Nordics, Netherlands, UK/London, Switzerland,
+         major EU financial/tech hubs, or EU-remote)
     AND posted in the last N days
-    AND looks like an INTERNSHIP
+    AND looks like an INTERNSHIP / off-cycle / spring / summer-analyst role
 
-Internships ONLY. Full-time roles (junior, new-grad, or otherwise) are no
-longer sent. Product-management internships ARE accepted (product manager /
-product management / product owner) — see PRODUCT_TOKENS in TECH_TOKENS.
+Internships & student programmes ONLY. Full-time roles (junior, new-grad,
+senior) are dropped. "Off-cycle", "spring week/insight", "summer analyst",
+"working student" and "industrial placement" ARE accepted — the finance and
+consulting cycles use those labels instead of the word "intern".
 
-All matching is case-insensitive and uses word boundaries so "intern" does
-NOT match inside "internal" / "international", "lead" does NOT match inside
-"leader-board", etc.
+All matching is case-insensitive and word-boundary based, so "intern" does
+NOT fire inside "internal"/"international", "lead" not inside "leaderboard".
 """
 from __future__ import annotations
 
@@ -22,87 +25,145 @@ import re
 from datetime import datetime, timedelta, timezone
 
 
-# --- "Is this an internship?" --------------------------------------------
-# Indian postings are English but use a few local labels of their own
-# ("industrial trainee", "articleship", "summer intern", "GET" style
-# programmes), on top of the multi-language tokens inherited from the
-# EU alerter — harmless to keep, they simply never fire here.
-DEFAULT_INTERN_TOKENS = [
-    # Only actual *internship* words — new-grad / junior signals are
-    # handled separately in label_for() so they're labelled correctly.
+# --- Early-career / insight / student-programme synonyms -----------------
+# Banks, consultancies and big tech all brand their student-facing schemes
+# differently. Catch every synonym so none slip through — these count both as
+# "this is a student programme" (internship gate) and "this is a wanted track"
+# (role gate), because an insight/off-cycle/spring/early-career scheme is
+# inherently something Subodh wants regardless of the function named.
+EARLY_CAREER_TOKENS = [
+    # Insight events
+    "insight", "insight programme", "insight program", "insight day",
+    "insight week", "insight evening", "insight series", "insight event",
+    # Spring / off-cycle / analyst cycles
+    "spring week", "spring insight", "spring programme", "spring program",
+    "off-cycle", "off cycle", "offcycle",
+    "summer analyst", "summer associate", "summer intern",
+    # Early-career / talent branding
+    "early career", "early careers", "early talent", "emerging talent",
+    "future talent", "next generation", "nextgen", "rising talent",
+    # Student / campus / university branding
+    "student programme", "student program", "student opportunities",
+    "campus", "on-campus", "university programme", "university program",
+    "undergraduate programme", "undergraduate program",
+    # Discovery / explore / immersion style names
+    "discovery programme", "discovery program", "discovery day",
+    "explore programme", "explore program", "exploration programme",
+    "immersion programme", "immersion program", "experience programme",
+    # Graduate / trainee schemes (final-year entry — Subodh wants these too)
+    "graduate programme", "graduate program", "graduate scheme", "grad scheme",
+    "graduate analyst", "trainee programme", "trainee program",
+    # Scholarships / fellowships / cohort names
+    "scholarship programme", "scholarship program", "scholars programme",
+    "fellowship", "academy", "bootcamp",
+    # Diversity-led student events (NOT the vetoed HR "diversity" — these are
+    # student pipelines) + year targeting
+    "women in", "penultimate", "first-year", "first year", "sophomore",
+    # Branded prop/quant early-career programmes & events (Jane Street, IMC,
+    # SIG, G-Research, Optiver, etc.). "extern" is word-boundary matched so it
+    # won't fire inside "external".
+    "launchpad", "extern", "externship", "fttp", "in focus", "visit day",
+    "talent community", "networking event", "estimathon", "hackathon",
+    "trading challenge", "trading program", "trading programme",
+    "trading academy", "quant challenge", "coding challenge", "open day",
+    "discovery day", "discovery program", "discovery programme",
+]
+
+# --- "Is this an internship / student programme?" ------------------------
+DEFAULT_INTERN_TOKENS = EARLY_CAREER_TOKENS + [
+    # Core internship words
     "intern", "interns", "internship", "internships",
     "co-op", "coop",
     "working student", "werkstudent",
-    "praktikum", "praktikant", "praktikantin",
-    "stagiaire", "stagiaires",
-    "stage",
-    "stagiair", "stagiairs",
+    "praktik", "praktikum", "praktikant", "praktikantin", "praktikplats",
+    "stagiaire", "stagiaires", "stage", "stagiair", "stagiairs",
     "tirocinio", "tirocinante",
     "becario", "becaria", "practicas", "prácticas",
     "harjoittelija", "harjoittelu",
     "apprentice", "apprenticeship",
-    # India-specific internship labels. Deliberately NOT included:
-    # "graduate engineer trainee" / "GET" / "management trainee" — those are
-    # full-time entry roles in India, and this alerter stays internship-only.
-    "industrial trainee", "student trainee", "summer trainee",
+    # Finance / consulting cycle labels (these are how banks & MBB name their
+    # student programmes — treat them as internships).
+    "off-cycle", "off cycle", "offcycle",
+    "spring week", "spring insight", "spring programme", "spring program",
+    "insight programme", "insight program", "insight day", "insight week",
+    "summer analyst", "summer internship", "summer intern",
+    "industrial placement", "placement student", "student placement",
+    "sandwich placement", "penultimate",
+    "trainee", "traineeship",   # Nordic/EU firms use "trainee" for student roles
 ]
 
 # Things that contain an internship keyword but aren't internships.
 INTERN_FALSE_POSITIVES = [
     "stage manager", "stage director", "stagehand",
-    "internship program manager",
-    "graduate program manager",
-    "head of early career",
-    "director of early career",
+    "internship program manager", "internship programme manager",
+    "graduate program manager", "graduate programme manager",
+    "head of early career", "director of early career",
+    "trainee manager", "trainee program manager",
 ]
 
 
-# --- "Is this a technical role we want?" ---------------------------------
-# IC-engineering + product management. Designers / Solutions / Sales / TPM /
-# Program-mgmt / Support / DevRel / Field roles are still vetoed below.
-# (Product MANAGEMENT is now wanted — see the "Product management" block.)
+# --- "Is this a role Subodh wants?" --------------------------------------
+# Four tracks. A posting is WANTED if it matches any track and isn't vetoed.
+
+# 1) Software / tech / data / ML — IC engineering.
 TECH_TOKENS = [
-    # Software / general engineering
     "engineer", "engineering", "developer", "software", "swe", "sde",
     "programmer", "fullstack", "full-stack", "full stack", "backend",
     "back-end", "back end", "frontend", "front-end", "front end",
     "mobile", "ios", "android", "platform", "infrastructure", "infra",
     "devops", "sre", "site reliability", "systems",
-    # Data / ML / AI / Research
     "data", "ml", "machine learning", "mle", "ai ", "artificial intelligence",
-    "deep learning", "research", "researcher", "scientist",
-    "applied scientist", "research scientist", "research engineer",
-    "computer vision", "nlp", "llm", "robotics", "perception", "autonomy",
-    # Simulation / physics / graphics
-    "simulation", "simulations", "simulator", "physics", "computational",
-    # Hardware / firmware / quant / chips
-    "hardware", "firmware", "asic", "fpga", "embedded", "chip",
-    "silicon", "rtl", "verification engineer", "physical design",
-    "compiler", "kernel",
-    # Security
-    "security", "cyber", "appsec", "secops", "vulnerability", "penetration",
-    "red team", "blue team",
-    # Cloud / data engineering
-    "cloud", "kubernetes", "platform engineer", "data engineer",
-    "performance engineer", "distributed",
-    # Game / graphics
-    "gameplay", "graphics", "rendering", "engine programmer",
-    "game programmer", "game developer", "shader",
-    # Quant
-    "quant", "quantitative",
-    # Forward deployed engineer (Palantir-style) — actually IC engineering.
+    "deep learning", "research engineer", "research scientist", "scientist",
+    "computer vision", "nlp", "llm", "robotics", "perception",
+    "simulation", "computational", "hardware", "firmware", "fpga", "embedded",
+    "compiler", "kernel", "security", "cyber", "appsec", "cloud",
+    "kubernetes", "data engineer", "distributed", "performance engineer",
     "forward deployed engineer",
-    # Product management (user wants these across ALL boards, incl. prestige
-    # big-tech). Multi-word tokens => substring match, so "Product Management
-    # Intern", "Associate Product Manager", "Product Owner" all match.
-    # NOTE: bare "product" is intentionally NOT listed (too broad — would
-    # catch "product marketing", "production", etc.).
+    # Product management (Subodh is open to APM/PM student roles)
     "product manager", "product management", "product owner",
     "associate product manager", "product management intern",
 ]
 
+# 2) Quant / trading.
+QUANT_TOKENS = [
+    "quant", "quantitative", "quantitative research", "quantitative trader",
+    "quantitative developer", "quant developer", "quant researcher",
+    "quant trading", "quant research", "systematic", "algorithmic",
+    "algo trading", "trader", "trading", "market maker", "market making",
+    "market-making", "execution", "low latency", "low-latency",
+]
 
-# --- "Is this HR / admin / not-our-thing?" -------------------------------
+# 3) Investment banking / finance / markets.
+FINANCE_TOKENS = [
+    "investment banking", "investment bank", "ibd", "m&a", "mergers",
+    "corporate finance", "global markets", "sales & trading",
+    "sales and trading", "equity research", "fixed income",
+    "private equity", "asset management", "wealth management",
+    "capital markets", "leveraged finance", "restructuring",
+    "investment analyst", "financial engineering", "structured finance",
+    "sustainable finance", "credit", "coverage", "advisory",
+    "portfolio", "risk", "actuar",
+]
+
+# 4) Consulting / strategy.
+CONSULTING_TOKENS = [
+    "consultant", "consulting", "business analyst", "associate consultant",
+    "strategy consultant", "management consult", "strategy&", "strategy &",
+    "generalist consultant",
+]
+
+# 5) Programme labels that are inherently a wanted student/early-career
+# scheme even when the title names no function ("Spring Week 2027",
+# "Insight Day", "Early Careers Programme", "Graduate Scheme").
+PROGRAMME_TOKENS = EARLY_CAREER_TOKENS
+
+WANTED_TOKEN_GROUPS = [TECH_TOKENS, QUANT_TOKENS, FINANCE_TOKENS,
+                       CONSULTING_TOKENS, PROGRAMME_TOKENS]
+
+
+# --- "Is this something to veto?" ----------------------------------------
+# NOTE: finance / consulting / business-analyst / BD are DELIBERATELY not
+# vetoed here — they're wanted tracks. Only clearly off-target functions.
 NON_TECH_VETO_TOKENS = [
     # Recruiting / HR / People
     "recruiter", "recruiting", "talent acquisition", "talent partner",
@@ -114,212 +175,152 @@ NON_TECH_VETO_TOKENS = [
     "executive assistant", "office manager", "office coordinator",
     "receptionist", "administrative", "admin assistant", "facilities",
     "workplace experience", "workplace coordinator", "office services",
-    # Legal / compliance / risk
-    "legal", "paralegal", "compliance", "counsel", "attorney",
-    "privacy counsel", "regulatory affairs", "ethics",
-    # Finance / accounting / procurement
-    "finance", "accountant", "accounting", "tax ", "treasury", "audit",
-    "auditor", "fp&a", "controller", "procurement", "purchasing",
-    "billing", "collections", "ap analyst", "ar analyst",
-    "financial analyst",
-    # Sales / marketing / GTM / customer success / partnerships
-    "sales", "sdr", "bdr", "account executive", "account manager",
-    "business development", "partnerships", "partner manager",
-    "channel manager", "customer success", "customer support",
-    "customer experience", "support engineer trainee", "support specialist",
-    "marketing", "growth marketer", "brand", "communications", "pr ",
+    # Legal / compliance-only
+    "legal", "paralegal", "counsel", "attorney",
+    "privacy counsel", "regulatory affairs", "ethics officer",
+    # Accounting / procurement (back-office, not front-office finance)
+    "accountant", "accounting", "tax analyst", "tax associate", "treasury ops",
+    "auditor", "audit associate", "controller", "procurement", "purchasing",
+    "billing", "collections", "accounts payable", "accounts receivable",
+    # Pure sales / marketing / GTM / CS / support
+    "sdr", "bdr", "account executive", "account manager",
+    "partner manager", "channel manager", "customer success",
+    "customer support", "customer service", "customer experience",
+    "support specialist", "support engineer",
+    "marketing", "growth marketer", "brand manager", "communications",
     "public relations", "content marketing", "social media",
     "community manager",
-    # Operations / supply chain / strategy (non-tech ops)
+    # Non-tech ops / supply chain / logistics
     "supply chain", "logistics", "warehouse", "operations analyst",
-    "operations manager", "strategy & operations", "biz ops",
-    "business operations", "strategic finance",
-    # Misc
+    "operations manager", "biz ops",
+    # Misc off-target
     "translator", "interpreter", "trainer", "teacher", "tutor",
     "writer", "editor", "journalist", "copywriter",
-    "videographer", "photographer",
-    "real estate", "investor relations",
-    "phlebotomist", "technician, lab", "lab technician",
-    # --- Sales-engineer / pre-sales / customer-facing "engineer" ---
+    "videographer", "photographer", "investor relations",
+    "phlebotomist", "lab technician",
+    # Sales-engineer / pre-sales / customer-facing "engineer"
     "solutions engineer", "solution engineer", "solutions architect",
-    "solution architect", "account solution", "pre-sales", "presales",
-    "sales engineer", "customer engineer",
-    "deployment strategist",
-    # --- Field / on-site / maintenance "engineer" ---
+    "solution architect", "pre-sales", "presales",
+    "sales engineer", "customer engineer", "deployment strategist",
+    # Field / on-site / maintenance "engineer"
     "field service engineer", "field engineer",
-    "maintenance engineering technician", "maintenance engineering manager",
-    "reliability maintenance engineering",
-    # --- Support / services "engineer" ---
+    "maintenance engineering", "reliability maintenance",
+    # Support / services "engineer"
     "technical services engineer", "services engineer",
-    "support engineer",
-    # --- DevRel / community / advocacy ---
+    # DevRel / advocacy
     "developer advocate", "developer relations", "devrel",
     "technical evangelist",
-    # --- Design / UX ---
+    # Design / UX
     "experience designer", "product designer", "ux designer",
     "ui designer", "ui/ux", "ux/ui", "visual designer", "brand designer",
     "graphic designer", "designer, ", "designer -", "designer:",
-    # --- Analyst (not engineer) ---
-    "data analyst", "business analyst", "intelligence analyst",
-    "competitor intelligence", "information security analyst",
-    "security analyst", "threat analyst",
-    # --- Program management (product MANAGEMENT now allowed via TECH_TOKENS) ---
+    # Program / engineering management
     "technical program manager", "program manager", " tpm ",
-    "platform owner",
-    # --- Engineering management ---
     "engineering manager", "manager, engineering",
-    "manager, site reliability", "manager, software",
-    "manager, machine learning", "manager, data",
-    "manager, security", "manager, infrastructure", "manager, platform",
     "head of engineering", "vp of engineering", "vp engineering",
     "director of engineering",
-    # --- Physical / data-center / ops roles that aren't SWE ---
-    "data center deployment", "data center technician", "cable install",
-    "loss prevention", "physical security", "safety specialist",
-    "workplace incident", "incident management",
-    "manufacturing engineer", "data management specialist",
-    "operations technician", "deployment specialist",
-    "investigator",
-    # --- German-language field/trade roles (Bosch etc.) ---
-    "sicherheitstechniker", "elektroniker",
-    # --- Customer-facing / consulting ---
-    "professional services", "business consulting",
+    # Physical / data-center / trade roles
+    "data center technician", "cable install", "loss prevention",
+    "physical security", "safety specialist", "manufacturing engineer",
+    "operations technician", "sicherheitstechniker", "elektroniker",
 ]
 
 
-# --- Senior / management labels (used to gate full-time roles) -----------
+# --- Senior / management labels (gate out full-time roles) ---------------
 SENIOR_TOKENS = [
     "senior", "sr ", "sr.", "sr,",
     "staff", "principal", "distinguished",
-    "lead", "leader",
-    "tech lead", "engineering lead", "team lead",
-    "architect",
+    "lead", "leader", "tech lead", "engineering lead", "team lead",
     "manager", "head of", "director", "directress",
     "vp ", "vp,", "v.p.", "vice president",
     "chief", "cto", "cio", "ceo", "cpo", "cfo", "chro", "cso",
-    "ii", "iii", "iv",
-    "expert", "advisor",
+    "ii", "iii", "iv", "expert",
 ]
 
 
-# --- India location ------------------------------------------------------
-# Every state and union territory. Word-boundary matched, so "Goa" will not
-# fire inside "Goandhra" and "India" will not fire inside "Indiana".
-INDIA_STATES = [
-    "India", "Bharat",
-    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
-    "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand",
-    "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
-    "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Orissa", "Punjab",
-    "Rajasthan", "Sikkim", "Tamil Nadu", "Tamilnadu", "Telangana",
-    "Tripura", "Uttar Pradesh", "Uttarakhand", "Uttaranchal",
-    "West Bengal",
-    # Union territories
-    "Andaman and Nicobar", "Chandigarh", "Dadra and Nagar Haveli",
-    "Daman and Diu", "Delhi", "Jammu and Kashmir", "Ladakh",
-    "Lakshadweep", "Puducherry", "Pondicherry",
-    # Note: "Punjab" also exists in Pakistan — NON_INDIA_VETO_COUNTRIES
-    # below kills "Lahore, Punjab, Pakistan".
+# --- Target locations ----------------------------------------------------
+# Countries Subodh can work in with low/no friction (EU free movement +
+# UK + Switzerland) plus the specific cities that host quant/finance/tech.
+TARGET_COUNTRIES = [
+    "Sweden", "Sverige",
+    "Norway", "Norge",
+    "Denmark", "Danmark",
+    "Finland", "Suomi",
+    "Iceland",
+    "Netherlands", "Nederland", "The Netherlands", "Holland",
+    "United Kingdom", "UK", "U.K.", "England", "Britain", "Great Britain",
+    "Switzerland", "Schweiz", "Suisse", "Svizzera",
+    "Ireland", "Éire",
+    "Germany", "Deutschland",
+    "France",
+    "Belgium", "België", "Belgique",
+    "Luxembourg",
+    "Italy", "Italia",
+    "Spain", "España",
+    "Poland", "Polska",
+    "Austria", "Österreich",
+    "Portugal",
+    "Estonia", "Lithuania", "Latvia",
 ]
 
-INDIA_CITIES = [
-    # --- Bengaluru ---
-    "Bengaluru", "Bangalore", "Whitefield", "Electronic City",
-    "Koramangala", "Marathahalli", "Bellandur", "Indiranagar",
-    "HSR Layout", "Hebbal", "Yelahanka", "Jayanagar", "Bommanahalli",
-    "Devanahalli", "Sarjapur", "Manyata", "Outer Ring Road",
-    # --- Hyderabad ---
-    "Hyderabad", "Secunderabad", "Gachibowli", "HITEC City", "Hitech City",
-    "Madhapur", "Kondapur", "Kukatpally", "Nanakramguda", "Shamshabad",
-    # --- Delhi NCR ---
-    "New Delhi", "Gurgaon", "Gurugram", "Noida", "Greater Noida",
-    "Ghaziabad", "Faridabad", "NCR", "Cyber City", "Cyber Hub",
-    "Sohna Road", "Dwarka", "Okhla", "Manesar",
-    # --- Mumbai ---
-    "Mumbai", "Bombay", "Navi Mumbai", "Thane", "Powai", "Andheri",
-    "Goregaon", "Bandra", "Malad", "Vikhroli", "Lower Parel",
-    "Worli", "Airoli", "Vashi", "Kalyan", "Dombivli", "Mira Road",
-    # --- Pune ---
-    "Pune", "Hinjewadi", "Hinjawadi", "Pimpri", "Chinchwad", "Kharadi",
-    "Magarpatta", "Baner", "Viman Nagar", "Wakad", "Hadapsar", "Talegaon",
-    # --- Chennai ---
-    "Chennai", "Madras", "Sholinganallur", "Guindy", "Taramani",
-    "Siruseri", "Perungudi", "Ambattur", "Tambaram", "Chengalpattu",
-    # --- Kolkata ---
-    "Kolkata", "Calcutta", "Howrah", "Rajarhat", "New Town", "Sector V",
-    "Durgapur", "Asansol", "Siliguri", "Kharagpur",
-    # --- West / Gujarat ---
-    "Ahmedabad", "Gandhinagar", "GIFT City", "Surat", "Vadodara",
-    "Baroda", "Rajkot", "Bhavnagar", "Jamnagar", "Anand", "Bharuch",
-    # --- Rajasthan ---
-    "Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer", "Bikaner",
-    # --- Uttar Pradesh / Uttarakhand ---
-    "Lucknow", "Kanpur", "Varanasi", "Banaras", "Prayagraj", "Allahabad",
-    "Agra", "Meerut", "Bareilly", "Aligarh", "Moradabad", "Gorakhpur",
-    "Jhansi", "Mathura", "Dehradun", "Haridwar", "Rishikesh", "Roorkee",
-    # --- Punjab / Haryana / HP / J&K ---
-    "Mohali", "Panchkula", "Ludhiana", "Amritsar", "Jalandhar", "Patiala",
-    "Zirakpur", "Shimla", "Dharamshala", "Srinagar", "Jammu", "Karnal",
-    "Hisar", "Ambala", "Sonipat", "Rohtak", "Panipat",
-    # --- Madhya Pradesh / Chhattisgarh ---
-    "Indore", "Bhopal", "Jabalpur", "Gwalior", "Ujjain", "Sagar",
-    "Raipur", "Bhilai", "Bilaspur", "Durg",
-    # --- Odisha / Jharkhand / Bihar ---
-    "Bhubaneswar", "Cuttack", "Rourkela", "Sambalpur", "Puri",
-    "Ranchi", "Jamshedpur", "Dhanbad", "Bokaro",
-    "Patna", "Gaya", "Muzaffarpur", "Bhagalpur",
-    # --- North-east ---
-    "Guwahati", "Dibrugarh", "Silchar", "Jorhat", "Tezpur",
-    "Shillong", "Imphal", "Agartala", "Aizawl", "Kohima", "Itanagar",
-    "Gangtok",
-    # --- Kerala ---
-    "Kochi", "Cochin", "Ernakulam", "Infopark", "Technopark",
-    "Thiruvananthapuram", "Trivandrum", "Kozhikode", "Calicut",
-    "Thrissur", "Kannur", "Kollam", "Alappuzha", "Kottayam", "Palakkad",
-    # --- Tamil Nadu (non-Chennai) ---
-    "Coimbatore", "Madurai", "Tiruchirappalli", "Trichy", "Salem",
-    "Tirunelveli", "Hosur", "Vellore", "Erode", "Tirupur", "Thoothukudi",
-    # --- Andhra / Telangana (non-Hyderabad) ---
-    "Visakhapatnam", "Vizag", "Vijayawada", "Guntur", "Tirupati",
-    "Amaravati", "Nellore", "Kakinada", "Rajahmundry", "Warangal",
-    "Karimnagar", "Nizamabad",
-    # --- Karnataka (non-Bengaluru) ---
-    "Mysore", "Mysuru", "Mangalore", "Mangaluru", "Hubli", "Hubballi",
-    "Belgaum", "Belagavi", "Davangere", "Shimoga", "Udupi", "Manipal",
-    # --- Maharashtra (non-Mumbai/Pune) ---
-    "Nagpur", "Nashik", "Nasik", "Aurangabad", "Chhatrapati Sambhajinagar",
-    "Kolhapur", "Solapur", "Amravati", "Satara", "Ratnagiri",
-    # --- Goa ---
-    "Panaji", "Panjim", "Margao", "Verna", "Porvorim",
+TARGET_CITIES = [
+    # Sweden
+    "Stockholm", "Göteborg", "Gothenburg", "Malmö", "Malmo", "Lund",
+    "Uppsala", "Solna", "Kista", "Sundbyberg",
+    # Nordics
+    "Oslo", "Bergen", "Trondheim",
+    "Copenhagen", "København", "Kobenhavn", "Aarhus",
+    "Helsinki", "Espoo", "Tampere",
+    "Reykjavik", "Reykjavík",
+    # Netherlands
+    "Amsterdam", "Rotterdam", "The Hague", "Den Haag", "Eindhoven",
+    "Utrecht", "Delft",
+    # UK
+    "London", "Cambridge", "Oxford", "Edinburgh", "Manchester",
+    # Switzerland
+    "Zurich", "Zürich", "Geneva", "Genève", "Zug", "Basel", "Lausanne",
+    # Ireland
+    "Dublin",
+    # Germany
+    "Frankfurt", "Munich", "München", "Berlin", "Hamburg", "Düsseldorf",
+    "Stuttgart",
+    # France / Benelux / other EU financial + tech hubs
+    "Paris", "Brussels", "Bruxelles", "Luxembourg City",
+    "Milan", "Milano", "Madrid", "Barcelona", "Warsaw", "Warszawa",
+    "Vienna", "Wien", "Lisbon", "Lisboa",
+    "Tallinn", "Vilnius", "Riga",
 ]
 
-# Umbrella / remote phrasings that mean "somewhere in India".
-INDIA_REMOTE_TOKENS = [
-    "Remote - India", "Remote, India", "India Remote", "Remote (India)",
-    "Remote-India", "India - Remote", "Pan India", "Pan-India",
-    "All India", "Anywhere in India", "Remote India",
-    "APAC - India", "IN Remote",
+# Remote phrasings that mean "somewhere Subodh could work".
+TARGET_REMOTE_TOKENS = [
+    "Remote - EU", "Remote, EU", "Remote (EU)", "EU Remote", "EU-Remote",
+    "Remote - Europe", "Remote, Europe", "Remote (Europe)", "Europe Remote",
+    "Remote Europe", "EMEA Remote", "Remote - EMEA", "Remote EMEA",
+    "Remote - Sweden", "Remote Sweden", "Remote, Sweden",
+    "Remote - Netherlands", "Remote - UK", "Remote UK",
+    "Nordics", "Nordic", "Scandinavia",
 ]
 
-# Countries whose city names collide with Indian ones ("Hyderabad, Sindh",
-# "Salem, OR", "Lahore, Punjab"). If one of these is named and the string
-# never says "India", the posting is rejected.
-NON_INDIA_VETO_COUNTRIES = [
-    "Pakistan", "Bangladesh", "Sri Lanka", "Nepal", "Bhutan", "Myanmar",
-    "United States", "USA", "U.S.", "U.S.A.", "Canada", "Mexico",
-    "United Kingdom", "Great Britain", "Ireland", "Germany", "France",
-    "Netherlands", "Spain", "Italy", "Poland", "Portugal", "Sweden",
-    "Switzerland", "Australia", "New Zealand", "Singapore", "Malaysia",
-    "Indonesia", "Philippines", "Thailand", "Vietnam", "Japan", "China",
-    "Korea", "Israel", "UAE", "United Arab Emirates", "Saudi Arabia",
-    "Qatar", "Egypt", "Nigeria", "South Africa", "Brazil", "Argentina",
+# Regions that are clearly NOT for Subodh. If one of these is named and no
+# target country/city is, the posting is rejected. Also kills collisions
+# (a "London, Ontario" or "Paris, TX" that names Canada / United States).
+NON_TARGET_VETO_COUNTRIES = [
+    "United States", "USA", "U.S.", "U.S.A.", "US-", "Canada", "Mexico",
+    "India", "Bharat", "Pakistan", "Bangladesh", "Sri Lanka",
+    "Singapore", "Malaysia", "Indonesia", "Philippines", "Thailand",
+    "Vietnam", "Japan", "China", "Hong Kong", "Korea", "Taiwan",
+    "Australia", "New Zealand",
+    "Israel", "UAE", "United Arab Emirates", "Saudi Arabia", "Qatar",
+    "Egypt", "Nigeria", "South Africa", "Kenya",
+    "Brazil", "Argentina", "Chile", "Colombia",
+    "Ontario", "Texas", "California", "New York",  # US/Canada state collisions
 ]
 
 
 # --- helpers --------------------------------------------------------------
 def _word_match(text: str, token: str) -> bool:
     """Case-insensitive whole-word(s) match. Handles multi-word tokens too."""
-    if " " in token or "-" in token:
+    if " " in token or "-" in token or "&" in token:
         return token.lower() in text.lower()
     return re.search(rf"(?<![A-Za-z]){re.escape(token)}(?![A-Za-z])",
                      text, flags=re.IGNORECASE) is not None
@@ -327,6 +328,13 @@ def _word_match(text: str, token: str) -> bool:
 
 def _any_word_match(text: str, tokens) -> bool:
     return any(_word_match(text, tok) for tok in tokens)
+
+
+def _word_in(text: str, token: str) -> bool:
+    if " " in token or "-" in token or "." in token:
+        return token.lower() in text.lower()
+    return re.search(rf"(?<![A-Za-z]){re.escape(token)}(?![A-Za-z])",
+                     text, flags=re.IGNORECASE) is not None
 
 
 # --- predicates -----------------------------------------------------------
@@ -347,99 +355,97 @@ def is_non_tech(title: str, dept: str = "") -> bool:
     return _any_word_match(blob, NON_TECH_VETO_TOKENS)
 
 
-def is_tech(title: str, dept: str = "") -> bool:
+def is_wanted_role(title: str, dept: str = "") -> bool:
+    """True if the title matches any of Subodh's four tracks."""
     blob = f"{title} || {dept}"
-    return _any_word_match(blob, TECH_TOKENS)
+    return any(_any_word_match(blob, grp) for grp in WANTED_TOKEN_GROUPS)
 
 
-def _word_in(text: str, token: str) -> bool:
-    return re.search(rf"(?<![A-Za-z]){re.escape(token)}(?![A-Za-z])",
-                     text, flags=re.IGNORECASE) is not None
+# Kept for backward-compat with any caller expecting is_tech().
+def is_tech(title: str, dept: str = "") -> bool:
+    return is_wanted_role(title, dept)
 
 
-# Metro buckets used by the digest's per-city sections.
-BENGALURU_TOKENS = [
-    "Bengaluru", "Bangalore", "Whitefield", "Electronic City",
-    "Koramangala", "Marathahalli", "Bellandur", "Indiranagar",
-    "HSR Layout", "Hebbal", "Yelahanka", "Jayanagar", "Bommanahalli",
-    "Devanahalli", "Sarjapur", "Manyata",
+def classify_track(title: str, dept: str = "") -> str:
+    """Bucket a role into one of Subodh's tracks for the Excel tracker.
+    Priority order resolves overlaps (a 'Quant Trader' is Quant, not Tech)."""
+    blob = f"{title} || {dept}"
+    if _any_word_match(blob, QUANT_TOKENS):
+        return "Quant"
+    if _any_word_match(blob, FINANCE_TOKENS):
+        return "Finance/IB"
+    if _any_word_match(blob, CONSULTING_TOKENS):
+        return "Consulting"
+    if _any_word_match(blob, TECH_TOKENS):
+        return "Tech/SWE"
+    return "Programme"
+
+
+# --- City buckets used by the digest's per-city sections -----------------
+STOCKHOLM_TOKENS = [
+    "Stockholm", "Solna", "Kista", "Sundbyberg", "Sverige",
+]
+NORDIC_TOKENS = [
+    "Göteborg", "Gothenburg", "Malmö", "Malmo", "Lund", "Uppsala",
+    "Oslo", "Bergen", "Trondheim", "Norway", "Norge",
+    "Copenhagen", "København", "Kobenhavn", "Aarhus", "Denmark", "Danmark",
+    "Helsinki", "Espoo", "Tampere", "Finland", "Reykjavik", "Reykjavík",
+    "Nordic", "Nordics", "Scandinavia", "Sweden",
+]
+AMSTERDAM_TOKENS = [
+    "Amsterdam", "Rotterdam", "The Hague", "Den Haag", "Eindhoven",
+    "Utrecht", "Delft", "Netherlands", "Nederland", "Holland",
+]
+LONDON_TOKENS = [
+    "London", "Cambridge", "Oxford", "Edinburgh", "Manchester",
+    "United Kingdom", "England",
+]
+ZURICH_TOKENS = [
+    "Zurich", "Zürich", "Geneva", "Genève", "Zug", "Basel", "Lausanne",
+    "Switzerland", "Schweiz", "Suisse",
 ]
 
-HYDERABAD_TOKENS = [
-    "Hyderabad", "Secunderabad", "Gachibowli", "HITEC City", "Hitech City",
-    "Madhapur", "Kondapur", "Kukatpally", "Nanakramguda", "Shamshabad",
-]
 
-NCR_TOKENS = [
-    "New Delhi", "Delhi", "Gurgaon", "Gurugram", "Noida", "Greater Noida",
-    "Ghaziabad", "Faridabad", "NCR", "Cyber City", "Cyber Hub",
-    "Sohna Road", "Dwarka", "Okhla", "Manesar",
-]
-
-MUMBAI_TOKENS = [
-    "Mumbai", "Bombay", "Navi Mumbai", "Thane", "Powai", "Andheri",
-    "Goregaon", "Bandra", "Malad", "Vikhroli", "Lower Parel", "Worli",
-    "Airoli", "Vashi",
-]
-
-PUNE_TOKENS = [
-    "Pune", "Hinjewadi", "Hinjawadi", "Pimpri", "Chinchwad", "Kharadi",
-    "Magarpatta", "Baner", "Viman Nagar", "Wakad", "Hadapsar",
-]
-
-CHENNAI_TOKENS = [
-    "Chennai", "Madras", "Sholinganallur", "Guindy", "Taramani",
-    "Siruseri", "Perungudi", "Ambattur", "Tambaram",
-]
+def is_stockholm_location(location: str) -> bool:
+    return bool(location) and _any_word_match(location, STOCKHOLM_TOKENS)
 
 
-def is_bengaluru_location(location: str) -> bool:
-    return bool(location) and _any_word_match(location, BENGALURU_TOKENS)
+def is_nordic_location(location: str) -> bool:
+    return bool(location) and _any_word_match(location, NORDIC_TOKENS)
 
 
-def is_hyderabad_location(location: str) -> bool:
-    return bool(location) and _any_word_match(location, HYDERABAD_TOKENS)
+def is_amsterdam_location(location: str) -> bool:
+    return bool(location) and _any_word_match(location, AMSTERDAM_TOKENS)
 
 
-def is_ncr_location(location: str) -> bool:
-    return bool(location) and _any_word_match(location, NCR_TOKENS)
+def is_london_location(location: str) -> bool:
+    return bool(location) and _any_word_match(location, LONDON_TOKENS)
 
 
-def is_mumbai_location(location: str) -> bool:
-    return bool(location) and _any_word_match(location, MUMBAI_TOKENS)
+def is_zurich_location(location: str) -> bool:
+    return bool(location) and _any_word_match(location, ZURICH_TOKENS)
 
 
-def is_pune_location(location: str) -> bool:
-    return bool(location) and _any_word_match(location, PUNE_TOKENS)
+def is_target_location(location: str, *,
+                       extra_tokens: list[str] | None = None) -> bool:
+    """True if the location clearly points at one of Subodh's target regions.
 
-
-def is_chennai_location(location: str) -> bool:
-    return bool(location) and _any_word_match(location, CHENNAI_TOKENS)
-
-
-def is_india_location(location: str, *,
-                      extra_tokens: list[str] | None = None) -> bool:
-    """True if the location string clearly points anywhere inside India.
-
-    Two-step: (1) find an India hint — a state, UT, city, remote phrasing,
-    the ISO-3 code IND, or a user-supplied extra token; (2) if the hint came
-    from a name that also exists abroad, drop the posting when a foreign
-    country is named and "India" itself is not.
-
-    The bare ISO-2 code "IN" is deliberately NOT accepted: it collides with
-    the English word "in" and with Indiana.
+    Two-step, mirroring the original India gate but inverted to a whitelist:
+      (1) find a target hint — a target country, city, remote phrasing, or a
+          user-supplied extra token;
+      (2) if a clearly non-target region is *also* named and no target
+          country is explicitly present, drop it (kills "London, Ontario",
+          "Paris, TX", "Amsterdam, NY").
     """
     if not location:
         return False
     loc = location.strip()
 
     has_hint = False
-    for token in INDIA_STATES + INDIA_CITIES + INDIA_REMOTE_TOKENS:
+    for token in TARGET_COUNTRIES + TARGET_CITIES + TARGET_REMOTE_TOKENS:
         if _word_in(loc, token):
             has_hint = True
             break
-    if not has_hint and re.search(r"(?<![A-Za-z0-9])IND(?![A-Za-z0-9])", loc):
-        has_hint = True
     if not has_hint and extra_tokens:
         low = loc.lower()
         for token in extra_tokens:
@@ -450,21 +456,21 @@ def is_india_location(location: str, *,
     if not has_hint:
         return False
 
-    # An explicit "India" / "Bharat" beats any collision.
-    if _word_in(loc, "India") or _word_in(loc, "Bharat"):
-        return True
+    # An explicit target COUNTRY name beats any city-name collision.
+    for country in TARGET_COUNTRIES:
+        if _word_in(loc, country):
+            return True
 
-    # City-only hint: reject if some other country is named alongside it
-    # ("Hyderabad, Sindh, Pakistan", "Salem, OR, United States").
-    for country in NON_INDIA_VETO_COUNTRIES:
+    # City-only hint: reject if a non-target region is named alongside it.
+    for country in NON_TARGET_VETO_COUNTRIES:
         if _word_in(loc, country):
             return False
     return True
 
 
 def posted_within(job: dict, days: int) -> bool:
-    """True if the job was posted within `days` days of now (or has no
-    timestamp at all — we don't want to silently drop boards that omit dates)."""
+    """True if posted within `days` days (or has no timestamp at all — we
+    don't want to silently drop boards that omit dates)."""
     posted_at: datetime | None = job.get("posted_at")
     if posted_at is None:
         return True
@@ -477,67 +483,77 @@ def passes(
     job: dict,
     *,
     intern_tokens: list[str] | None = None,
-    india_extra_tokens: list[str] | None = None,
+    extra_location_tokens: list[str] | None = None,
     max_age_days: int = 3,
 ) -> bool:
     title = job.get("title", "")
     dept = job.get("department", "") or ""
     location = job.get("location", "")
 
-    # Location gate. India only — no exceptions for any company.
-    if not is_india_location(location, extra_tokens=india_extra_tokens):
+    # Location gate — target regions only.
+    if not is_target_location(location, extra_tokens=extra_location_tokens):
         return False
 
     # Freshness gate
     if not posted_within(job, max_age_days):
         return False
 
-    # HR / admin / legal / finance veto first — wins over everything.
+    # Trusted source: a curated early-career/events board (e.g. Jane Street's
+    # hidden-events board) where every posting is inherently a student event.
+    # Skip the role/internship gates — location + freshness already applied.
+    if job.get("_trust"):
+        return True
+
+    # HR / admin / legal / sales / support veto first — wins over everything.
     if is_non_tech(title, dept):
         return False
 
-    # Must look technical-ish (engineering / data / ... / product management).
-    if not is_tech(title, dept):
+    # Must match one of Subodh's four tracks.
+    if not is_wanted_role(title, dept):
         return False
 
-    # Internships ONLY. Full-time roles (junior, new-grad, or senior) are
-    # dropped regardless of company. Any seniority of internship is fine.
+    # Internships / student programmes ONLY.
     return is_internship(title, intern_tokens=intern_tokens)
 
 
-_ROLE_NOUN = r"engineer|developer|programmer|designer|scientist|analyst|researcher|architect|sde|swe"
+_ROLE_NOUN = r"engineer|developer|programmer|designer|scientist|analyst|researcher|architect|sde|swe|trader|consultant"
 
 _JR_LEVEL_PATTERNS = [
-    # "<role> I" / "<role> II"  (Roman I and II only — III/IV are mid+)
     re.compile(rf"\b({_ROLE_NOUN})\s+(i{{1,2}})\b", re.I),
-    # "<role> 1" / "<role> 2" / "<role> L1" / "<role>, level 2"
     re.compile(rf"\b({_ROLE_NOUN})\s*[,]?\s*(level\s*|l\s*)?(1|2)\b(?!\d)", re.I),
-    # "L1 <role>" / "L2 <role>"
     re.compile(rf"\bL\s?(1|2)\b\s+({_ROLE_NOUN})", re.I),
 ]
 
 
 def label_for(job: dict) -> str:
-    """Short label to show in the digest (Intern / Grad / Junior / Regular)."""
+    """Short label to show in the digest (Internship / Off-cycle / Spring /
+    Summer analyst / Grad / Junior / Regular)."""
     title = job.get("title", "")
     low = title.lower()
+    # An explicit full-time marker wins over "campus"/"graduate" wording, so a
+    # "Campus Quant Trader (Full-Time)" isn't mislabelled as an internship.
+    if ("full-time" in low or "full time" in low) and "intern" not in low:
+        return "Grad/FT"
+    if any(k in low for k in ("off-cycle", "off cycle", "offcycle")):
+        return "Off-cycle"
+    if any(k in low for k in ("spring week", "spring insight", "spring programme",
+                              "spring program", "insight")):
+        return "Spring/Insight"
+    if "summer analyst" in low:
+        return "Summer analyst"
     if is_internship(title):
         return "Internship"
-    # New-grad / early-career / graduate-style language
     if any(k in low for k in ("new grad", "new graduate", "graduate program",
                               "graduate programme", "grad program",
                               "early career", "early-career",
                               "university grad", "campus hire")):
         return "New grad"
-    # Standalone "graduate" word (e.g. "Graduate Software Engineer")
     if _word_match(title, "graduate"):
         return "New grad"
-    # Junior-flavored tokens
     if any(_word_match(title, k) for k in
            ("junior", "jr", "entry-level", "entry level", "associate",
             "trainee", "traineeship")):
         return "Junior"
-    # Level indicators: SDE 1 / Engineer I / L1 / L2 etc.
     for rx in _JR_LEVEL_PATTERNS:
         if rx.search(title):
             return "Junior"

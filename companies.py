@@ -758,10 +758,77 @@ INDIA_CORE = [
 ]
 
 
+# --- Quant / finance / consulting Subodh cares about, NOT already wired ----
+# The EXTRAS group already wires the working prop/quant boards (Jane Street,
+# IMC, Flow Traders, HRT, Citadel, Two Sigma, DRW, G-Research, Akuna, Five
+# Rings, Old Mission, Radix, Virtu). This list only adds names that weren't in
+# the catalog. Banks and MBB run on Workday/own portals with no public JSON,
+# so they're ats=None (on record, skipped) until wired via a scraper or a
+# jobspy id — their off-cycle/insight roles you still track by hand.
+# Wired via jobspy (LinkedIn id where known as the numeric slug, otherwise a
+# name token that routes to Google Jobs). `jobspy_search` picks the function
+# to search (banks -> "analyst", MBB -> "consultant"), `jobspy_regions` the
+# locations. Only surfaces on `--jobspy` / USE_JOBSPY=1. The passes() gate
+# still keeps only internship / off-cycle / spring / summer-analyst results.
+FINANCE_QUANT = [
+    # --- curated early-career EVENT boards (trust=True -> every posting is a
+    # student event; only location + freshness gate it) ---
+    {"name": "Jane Street (events)", "ats": "greenhouse", "slug": "jshiddenevents",
+     "country": "UK", "trust": True},
+    # --- prop / quant not already in EXTRAS ---
+    {"name": "Point72 / Cubist",       "ats": "jobspy", "slug": "point72",     "country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "SIG (Susquehanna)",      "ats": "jobspy", "slug": "8780",        "country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "XTX Markets",            "ats": "jobspy", "slug": "xtxmarkets",  "country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "Qube Research & Technologies","ats": "jobspy","slug": "qube-rt", "country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "Quadrature Capital",     "ats": "jobspy", "slug": "quadrature",  "country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "Squarepoint Capital",    "ats": "jobspy", "slug": "squarepoint", "country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "Maven Securities",       "ats": "jobspy", "slug": "maven-securities","country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "Tower Research Capital",  "ats": "jobspy", "slug": "tower-research-capital","country": "UK",
+     "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "Wincent",                "ats": "jobspy", "slug": "wincent",     "country": "SE",
+     "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
+    {"name": "Lynx Asset Management",  "ats": "jobspy", "slug": "lynx-asset-management","country": "SE",
+     "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
+    # --- bulge-bracket / banks (off-cycle + summer analyst in EU) ---
+    {"name": "J.P. Morgan",            "ats": "jobspy", "slug": "1067",        "country": "UK",
+     "jobspy_search": ["analyst"], "jobspy_regions": ["Sweden", "United Kingdom"]},
+    {"name": "Goldman Sachs",          "ats": "jobspy", "slug": "1038",        "country": "UK",
+     "jobspy_search": ["analyst"], "jobspy_regions": ["United Kingdom"]},
+    {"name": "Morgan Stanley",         "ats": "workday", "slug": "ms/5/External/intern", "country": "UK"},
+    {"name": "Barclays",               "ats": "workday", "slug": "barclays/3/External_Career_Site_Barclays/intern", "country": "UK"},
+    {"name": "Citi",                   "ats": "workday", "slug": "citi/5/2/intern", "country": "UK"},
+    {"name": "Deutsche Bank",          "ats": "workday", "slug": "db/3/DBWebsite/intern", "country": "DE"},
+    {"name": "UBS",                    "ats": "jobspy", "slug": "ubs",         "country": "CH",
+     "jobspy_search": ["analyst"], "jobspy_regions": ["Switzerland", "United Kingdom"]},
+    {"name": "SEB",                    "ats": "jobspy", "slug": "seb",         "country": "SE",
+     "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
+    {"name": "Handelsbanken",          "ats": "jobspy", "slug": "handelsbanken","country": "SE",
+     "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
+    {"name": "Nordea",                 "ats": "jobspy", "slug": "nordea",      "country": "SE",
+     "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
+    {"name": "Carnegie Investment Bank","ats": "jobspy","slug": "carnegie",    "country": "SE",
+     "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
+    # --- consulting ---
+    {"name": "McKinsey & Company",     "ats": "jobspy", "slug": "mckinsey",    "country": "SE",
+     "jobspy_search": ["business analyst"], "jobspy_regions": ["Sweden", "United Kingdom"]},
+    {"name": "Boston Consulting Group","ats": "jobspy", "slug": "boston-consulting-group","country": "SE",
+     "jobspy_search": ["associate"], "jobspy_regions": ["Sweden"]},
+    {"name": "Bain & Company",         "ats": "jobspy", "slug": "bain-and-company","country": "SE",
+     "jobspy_search": ["associate consultant"], "jobspy_regions": ["Sweden"]},
+]
+
+
 def all_companies() -> list[dict]:
     out: list[dict] = []
     for c in (GLOBAL + GLOBAL_EU_BIASED + FINLAND + SWITZERLAND + EU_SCALEUPS
-              + EXTRAS + INDIA + INDIA_CORE):
+              + EXTRAS + FINANCE_QUANT):
         c.setdefault("country", "")
         out.append(c)
     return out

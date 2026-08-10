@@ -57,7 +57,7 @@ async def send_job(
     url = job.get("url", "")
 
     parts = [
-        f"<b>{company}</b> — new India role",
+        f"<b>{company}</b> — new role",
         f"<b>{title}</b>",
         f"📍 {location}",
     ]
@@ -129,31 +129,29 @@ def _format_job_line(job: dict) -> str:
 def _build_digest_messages(jobs: list[dict], *, max_age_days: int) -> list[str]:
     """Return one or more HTML message bodies fitting Telegram's size cap.
 
-    Sections, top to bottom (every job is India-located by the time it gets
-    here — the split is by metro):
-      • 🏙 BENGALURU
-      • 💠 HYDERABAD
-      • 🏛 DELHI NCR       (Delhi / Gurugram / Noida / Ghaziabad / Faridabad)
-      • 🌊 MUMBAI          (incl. Navi Mumbai / Thane)
-      • 🏞 PUNE
-      • 🛕 CHENNAI
-      • 🇮🇳 REST OF INDIA  (everything else, incl. Pan-India / remote)
+    Sections, top to bottom (every job is in a target region by the time it
+    gets here — the split is by city):
+      • 🏙 STOCKHOLM
+      • ❄️ NORDICS         (rest of Sweden + Norway / Denmark / Finland / Iceland)
+      • 🌷 AMSTERDAM / NL
+      • 🎡 LONDON / UK
+      • ⛰ ZURICH / CH
+      • 🇪🇺 REST OF EUROPE  (Dublin / Frankfurt / Paris / … + EU-remote)
     """
     if not jobs:
         return []
 
-    from filters import (is_bengaluru_location, is_hyderabad_location,
-                         is_ncr_location, is_mumbai_location,
-                         is_pune_location, is_chennai_location)
+    from filters import (is_stockholm_location, is_nordic_location,
+                         is_amsterdam_location, is_london_location,
+                         is_zurich_location)
 
-    # First matching bucket wins, so a "Bengaluru / Pune" posting lands once.
+    # First matching bucket wins, so a "Stockholm / Amsterdam" posting lands once.
     buckets = [
-        ("🏙 BENGALURU", is_bengaluru_location, []),
-        ("💠 HYDERABAD", is_hyderabad_location, []),
-        ("🏛 DELHI NCR", is_ncr_location, []),
-        ("🌊 MUMBAI", is_mumbai_location, []),
-        ("🏞 PUNE", is_pune_location, []),
-        ("🛕 CHENNAI", is_chennai_location, []),
+        ("🏙 STOCKHOLM", is_stockholm_location, []),
+        ("❄️ NORDICS", is_nordic_location, []),
+        ("🌷 AMSTERDAM / NL", is_amsterdam_location, []),
+        ("🎡 LONDON / UK", is_london_location, []),
+        ("⛰ ZURICH / CH", is_zurich_location, []),
     ]
     rest_jobs: list[dict] = []
     for j in jobs:
@@ -168,7 +166,7 @@ def _build_digest_messages(jobs: list[dict], *, max_age_days: int) -> list[str]:
     today = datetime.now(timezone.utc).strftime("%a %d %b %Y")
     n_companies = len({j.get("company", "?") for j in jobs})
     header = (
-        f"<b>🇮🇳 India tech / SWE internship digest — {html.escape(today)}</b>\n"
+        f"<b>🎯 Internship digest — {html.escape(today)}</b>\n"
         f"{len(jobs)} new role(s) across {n_companies} compan(ies), "
         f"posted in the last {max_age_days} day(s)."
     )
@@ -204,7 +202,7 @@ def _build_digest_messages(jobs: list[dict], *, max_age_days: int) -> list[str]:
 
     for name, _pred, acc in buckets:
         pieces.extend(section_pieces(name, acc))
-    pieces.extend(section_pieces("🇮🇳 REST OF INDIA", rest_jobs))
+    pieces.extend(section_pieces("🇪🇺 REST OF EUROPE", rest_jobs))
 
     # Greedy split into <=4000-char chunks at piece boundaries.
     chunks: list[str] = []

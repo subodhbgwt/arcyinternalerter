@@ -37,9 +37,11 @@ def _epoch(dt) -> datetime | None:
 
 def _scrape_one(company_name: str, linkedin_id: str | None,
                 hours_old: int, max_results: int,
-                region: str = "India") -> list[dict]:
+                region: str = "Sweden",
+                search_term: str = "software engineer") -> list[dict]:
     """Blocking — call via asyncio.to_thread. `region` is the search
-    location, always India for this alerter."""
+    location; `search_term` lets finance/consulting firms search their own
+    function (e.g. "analyst") instead of the tech default."""
     try:
         from jobspy import scrape_jobs
     except ImportError:
@@ -49,7 +51,7 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
     sites = ["linkedin"] if linkedin_id else ["google"]
     kwargs = {
         "site_name": sites,
-        "search_term": "software engineer",
+        "search_term": search_term,
         "location": region,
         "results_wanted": max_results,
         "hours_old": hours_old,
@@ -64,7 +66,7 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
     else:
         where = region
         kwargs["google_search_term"] = (
-            f'"{company_name}" software engineer jobs {where} '
+            f'"{company_name}" {search_term} internship jobs {where} '
             f"since {hours_old//24 or 1} days ago"
         )
 
@@ -96,9 +98,10 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
     return out
 
 
-# Single search region — this alerter is India-only, so there is no second
-# pass for any company.
-REGIONS = ["India"]
+# Default search region is Sweden (keeps the ~130-company generic sweep fast
+# and Stockholm-relevant). Finance/consulting firms override with their own
+# "jobspy_regions" list (e.g. banks -> UK, UBS -> Switzerland).
+REGIONS = ["Sweden"]
 
 
 async def fetch_jobspy(company: dict, *, hours_old: int = 48,
@@ -111,23 +114,29 @@ async def fetch_jobspy(company: dict, *, hours_old: int = 48,
     elif slug.isdigit():
         linkedin_id = slug
 
-    regions = list(REGIONS)
+    regions = company.get("jobspy_regions") or list(REGIONS)
+    searches = company.get("jobspy_search") or ["software engineer"]
+    if isinstance(searches, str):
+        searches = [searches]
 
     jobs: list[dict] = []
     seen: set[str] = set()
-    for i, region in enumerate(regions):
-        if i:
-            # Throttle between passes so LinkedIn doesn't 429 us.
-            await asyncio.sleep(8)
-        batch = await asyncio.to_thread(
-            _scrape_one, company_name, linkedin_id, hours_old,
-            max_results, region,
-        )
-        for j in batch:
-            if j["id"] in seen:
-                continue
-            seen.add(j["id"])
-            jobs.append(j)
+    first = True
+    for region in regions:
+        for term in searches:
+            if not first:
+                # Throttle between passes so LinkedIn doesn't 429 us.
+                await asyncio.sleep(8)
+            first = False
+            batch = await asyncio.to_thread(
+                _scrape_one, company_name, linkedin_id, hours_old,
+                max_results, region, term,
+            )
+            for j in batch:
+                if j["id"] in seen:
+                    continue
+                seen.add(j["id"])
+                jobs.append(j)
 
     for j in jobs:
         j["company"] = company_name

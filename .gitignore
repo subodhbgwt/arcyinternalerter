@@ -3,3 +3,7 @@
 __pycache__/
 state.json
 *.log
+
+# Personal data — never publish
+job_tracker.xlsx
+applications/

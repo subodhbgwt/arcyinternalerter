@@ -275,18 +275,28 @@ def _wd_parse_posted(text: str | None) -> datetime | None:
 
 
 async def fetch_workday(session: aiohttp.ClientSession, slug: str) -> list[dict]:
+    # Slug is "tenant/cluster/site" and may carry an optional 4th segment used
+    # as a server-side searchText (e.g. "db/3/DBWebsite/intern") so big boards
+    # are narrowed before paging — otherwise the newest-80 slice buries the
+    # handful of intern roles among hundreds of unrelated postings.
     parts = slug.split("/")
-    if len(parts) != 3:
-        log.warning("Workday slug must be tenant/cluster/site, got %r", slug)
+    if len(parts) == 4:
+        tenant, cluster, site, search_text = parts
+    elif len(parts) == 3:
+        tenant, cluster, site = parts
+        search_text = ""
+    else:
+        log.warning("Workday slug must be tenant/cluster/site[/search], got %r", slug)
         return []
-    tenant, cluster, site = parts
     base = f"https://{tenant}.wd{cluster}.myworkdayjobs.com"
     url = f"{base}/wday/cxs/{tenant}/{site}/jobs"
 
     out: list[dict] = []
-    # Pull a few pages so we don't miss things older than the top 20.
-    for offset in range(0, 80, 20):
-        body = {"appliedFacets": {}, "limit": 20, "offset": offset, "searchText": ""}
+    # A filtered search returns few rows, so page deeper (up to 140); an
+    # unfiltered board still stops early via the <20 break below.
+    for offset in range(0, 140, 20):
+        body = {"appliedFacets": {}, "limit": 20, "offset": offset,
+                "searchText": search_text}
         data = await _post_json(session, url, body)
         if not data:
             break

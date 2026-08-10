@@ -70,7 +70,9 @@ DIGEST_INTERVAL_HOURS = float(
 )
 MAX_AGE_DAYS = int(_clean(os.environ.get("MAX_AGE_DAYS", "")) or "2")
 STATE_FILE = ROOT / (_clean(os.environ.get("STATE_FILE", "")) or "state.json")
-INDIA_EXTRA = _csv(_clean(os.environ.get("INDIA_LOCATIONS", "")))
+TRACKER_FILE = ROOT / (_clean(os.environ.get("TRACKER_FILE", "")) or "job_tracker.xlsx")
+EXTRA_LOC = _csv(_clean(os.environ.get("EXTRA_LOCATIONS", "")
+                        or os.environ.get("INDIA_LOCATIONS", "")))
 INTERN_EXTRA = _csv(_clean(os.environ.get("INTERN_KEYWORDS", "")))
 USE_BROWSER = _clean(os.environ.get("USE_BROWSER", "")) in ("1", "true", "True", "yes")
 USE_JOBSPY = _clean(os.environ.get("USE_JOBSPY", "")) in ("1", "true", "True", "yes")
@@ -87,7 +89,11 @@ async def _fetch_all(session: aiohttp.ClientSession,
     async def one(company: dict) -> list[dict]:
         async with sem:
             try:
-                return await fetch_company(session, company)
+                jobs = await fetch_company(session, company)
+                if company.get("trust"):
+                    for j in jobs:
+                        j["_trust"] = True
+                return jobs
             except Exception as exc:
                 log.warning("Fetch failed for %s: %s", company.get("name"), exc)
                 return []
@@ -175,7 +181,7 @@ def _filter_jobs(jobs: list[dict]) -> list[dict]:
         if not passes(
             job,
             intern_tokens=INTERN_EXTRA or None,
-            india_extra_tokens=INDIA_EXTRA or None,
+            extra_location_tokens=EXTRA_LOC or None,
             max_age_days=MAX_AGE_DAYS,
         ):
             continue
@@ -204,7 +210,7 @@ async def cmd_digest(*, dry_run: bool, use_browser: bool,
         log.info("Fetched %d total postings", len(all_jobs))
 
         matches = _filter_jobs(all_jobs)
-        log.info("After tech/SWE + India + %dd freshness filter: %d roles",
+        log.info("After track + region + %dd freshness filter: %d roles",
                  MAX_AGE_DAYS, len(matches))
 
         # Dedupe against state — we keep this so a posting that was in
@@ -233,10 +239,18 @@ async def cmd_digest(*, dry_run: bool, use_browser: bool,
                 session,
                 bot_token=TELEGRAM_BOT_TOKEN,
                 chat_id=TELEGRAM_CHAT_ID,
-                text=f"No new India tech/SWE internships found today ({today}).",
+                text=f"No new matching internships found today ({today}).",
             )
             log.info("Nothing new — sent empty digest notification.")
             return 0
+
+        # Append to the running Excel tracker (before send, so a Telegram
+        # outage doesn't lose the log; the sheet dedupes by job id).
+        try:
+            from excel_tracker import append_jobs
+            append_jobs(new_jobs, TRACKER_FILE)
+        except Exception:
+            log.exception("Excel tracker update failed (continuing).")
 
         sent = await send_digest(
             session,
