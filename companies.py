@@ -819,7 +819,7 @@ FINANCE_QUANT = [
     {"name": "McKinsey & Company",     "ats": "jobspy", "slug": "mckinsey",    "country": "SE",
      "jobspy_search": ["business analyst"], "jobspy_regions": ["Sweden", "United Kingdom"]},
     {"name": "Boston Consulting Group","ats": "jobspy", "slug": "boston-consulting-group","country": "SE",
-     "jobspy_search": ["associate"], "jobspy_regions": ["Sweden"]},
+     "jobspy_search": ["associate", "visiting associate", "platinion"], "jobspy_regions": ["Sweden"]},
     {"name": "Bain & Company",         "ats": "jobspy", "slug": "bain-and-company","country": "SE",
      "jobspy_search": ["associate consultant"], "jobspy_regions": ["Sweden"]},
 ]

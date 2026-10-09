@@ -39,6 +39,7 @@ EARLY_CAREER_TOKENS = [
     "spring week", "spring insight", "spring programme", "spring program",
     "off-cycle", "off cycle", "offcycle",
     "summer analyst", "summer associate", "summer intern",
+    "visiting associate",
     # Early-career / talent branding
     "early career", "early careers", "early talent", "emerging talent",
     "future talent", "next generation", "nextgen", "rising talent",
