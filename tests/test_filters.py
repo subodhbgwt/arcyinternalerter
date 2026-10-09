@@ -1,163 +1,157 @@
-"""Smoke test for the filter logic. No network, no Telegram, no env needed.
+"""Tests for the filter logic. No network, Telegram or .env needed.
 
-Run:
-    python tests/test_filters.py
+Run with:  python -m pytest -q tests
 
-Rule under test: a posting is kept only if it is (a) located in India,
-(b) technical / product-management, (c) not HR / admin / sales / support,
-and (d) an internship.
+A posting is kept only if it's (a) in one of my target regions, (b) recent
+enough, (c) in one of the four tracks (quant, tech, finance, consulting),
+(d) not HR / admin / sales / support, and (e) a student role.
 """
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from filters import (passes, label_for, is_india_location,          # noqa: E402
-                     is_bengaluru_location, is_hyderabad_location,
-                     is_ncr_location, is_mumbai_location,
-                     is_pune_location, is_chennai_location)
+from filters import (  # noqa: E402
+    classify_track,
+    is_amsterdam_location,
+    is_internship,
+    is_london_location,
+    is_nordic_location,
+    is_stockholm_location,
+    is_target_location,
+    is_zurich_location,
+    label_for,
+    passes,
+    posted_within,
+)
+
+NOW = datetime.now(timezone.utc)
 
 
-def main() -> int:
-    now = datetime.now(timezone.utc)
-    cases = [
-        # (title, location, dept, expected, reason)
-        # --- kept: internship + tech + India ---
-        ('Software Engineer Intern',             'Bengaluru, Karnataka, India', 'Engineering', True,  'intern + India'),
-        ('Senior Software Engineer Intern',      'Hyderabad, Telangana',        'Engineering', True,  'intern (modifier ignored)'),
-        ('SDE Intern',                           'Gurugram, Haryana',           'Engineering', True,  'NCR intern'),
-        ('Machine Learning Intern',              'Pune, Maharashtra',           'ML',          True,  'MLE intern'),
-        ('Data Science Intern',                  'Noida, Uttar Pradesh',        'Data',        True,  'DS intern'),
-        ('Product Management - Intern',          'Noida, Uttar Pradesh',        'Product',     True,  'PM intern allowed'),
-        ('Industrial Trainee - Embedded Systems','Chennai, Tamil Nadu',         'Engineering', True,  'India-specific intern label'),
-        ('Software Engineering Intern',          'Remote - India',              'Engineering', True,  'remote India'),
-        ('Backend Engineer Intern',              'Pan India',                   'Engineering', True,  'pan-India phrasing'),
-        ('Firmware Intern',                      'Kochi, Kerala',               'Engineering', True,  'tier-2 city'),
-        ('Research Intern - Computer Vision',    'Bhubaneswar, Odisha',         'Research',    True,  'east India'),
-
-        # --- dropped: right role, wrong country ---
-        ('Software Engineer Intern',             'San Francisco, CA',           'Engineering', False, 'US'),
-        ('Software Engineer Intern',             'London, UK',                  'Engineering', False, 'UK'),
-        ('Software Engineer Intern',             'Helsinki, Finland',           'Engineering', False, 'EU'),
-        ('Software Engineer Intern',             'Singapore',                   'Engineering', False, 'APAC but not India'),
-        ('Software Engineer Intern',             'Hyderabad, Sindh, Pakistan',  'Engineering', False, 'name collision, Pakistan'),
-        ('Software Engineer Intern',             'Salem, OR, United States',    'Engineering', False, 'name collision, Oregon'),
-        ('Software Engineer Intern',             'Indianapolis, Indiana, USA',  'Engineering', False, '"India" not inside "Indiana"'),
-        ('Software Engineer Intern',             'Remote - Europe',             'Engineering', False, 'EU remote'),
-
-        # --- dropped: right country, not an internship ---
-        ('Software Engineer',                    'Bengaluru, India',            'Engineering', False, 'full-time IC'),
-        ('Junior Software Engineer',             'Pune, India',                 'Engineering', False, 'junior FT'),
-        ('Software Engineer, New Grad',          'Chennai, India',              'Engineering', False, 'new grad FT'),
-        ('Senior Software Engineer',             'Bengaluru, India',            'Engineering', False, 'senior FT'),
-        ('Graduate Engineer Trainee',            'Pune, India',                 'Engineering', False, 'Indian GET is full-time, not an internship'),
-        ('Management Trainee',                   'Mumbai, India',               'Operations',  False, 'MT is full-time'),
-
-        # --- dropped: right country + internship, wrong function ---
-        ('HR Intern',                            'Bengaluru, India',            'People',      False, 'HR vetoed'),
-        ('Talent Acquisition Intern',            'Gurugram, India',             'People',      False, 'recruiting vetoed'),
-        ('Finance Intern',                       'Mumbai, India',               'Finance',     False, 'finance vetoed'),
-        ('Sales Development Intern',             'Delhi, India',                'Sales',       False, 'sales vetoed'),
-        ('Content Writing Intern',               'Bengaluru, India',            'Marketing',   False, 'marketing vetoed'),
-        ('International Tax Advisor',            'Mumbai, India',               'Finance',     False, 'finance, has "intern" substring'),
-        ('Stage Manager',                        'Mumbai, India',               'Production',  False, '"stage" false-positive guard'),
-        ('Engineering Manager Intern',           'Bengaluru, India',            'Engineering', False, 'IC-only, "manager" vetoed'),
-    ]
-
-    ok = bad = 0
-    for title, loc, dept, expected, reason in cases:
-        job = {"title": title, "location": loc, "department": dept, "posted_at": now}
-        got = passes(job)
-        mark = "OK" if got == expected else "FAIL"
-        if got == expected:
-            ok += 1
-        else:
-            bad += 1
-        print(f"{mark:4}  expect={int(expected)} got={int(got)}  "
-              f"{title:40} | {loc:30} | {reason}")
-
-    # --- label_for() ---
-    label_cases = [
-        ("Software Engineer Intern",          "Internship"),
-        ("SDE Intern",                        "Internship"),
-        ("Industrial Trainee - VLSI",         "Internship"),
-        ("Graduate Software Engineer",        "New grad"),
-        ("Software Engineer, New Grad",       "New grad"),
-        ("Junior Software Engineer",          "Junior"),
-        ("Associate Software Engineer",       "Junior"),
-        ("SDE 1, Payments",                   "Junior"),
-        ("Software Engineer III",             "Regular"),
-        ("Software Engineer",                 "Regular"),
-    ]
-    print("\n--- label_for() ---")
-    for title, expected in label_cases:
-        got = label_for({"title": title})
-        mark = "OK" if got == expected else "FAIL"
-        if got == expected:
-            ok += 1
-        else:
-            bad += 1
-        print(f"{mark:4}  expect={expected:11}  got={got:11}  {title}")
-
-    # --- is_india_location() ---
-    geo_cases = [
-        ("Bengaluru, Karnataka, India", True),
-        ("Bangalore", True),
-        ("Hyderabad, Telangana", True),
-        ("Gurugram", True),
-        ("Sector 62, Noida", True),
-        ("Navi Mumbai", True),
-        ("Hinjewadi, Pune", True),
-        ("Guwahati, Assam", True),
-        ("Thiruvananthapuram", True),
-        ("Bengaluru / Gurgaon", True),
-        ("IND-Bengaluru", True),
-        ("Remote (India)", True),
-        ("Hyderabad, Sindh, Pakistan", False),
-        ("Lahore, Punjab, Pakistan", False),
-        ("Salem, OR, United States", False),
-        ("Indianapolis, Indiana, USA", False),
-        ("Dhaka, Bangladesh", False),
-        ("Helsinki, Finland", False),
-        ("Remote in EMEA", False),
-        ("", False),
-    ]
-    print("\n--- is_india_location() ---")
-    for loc, expected in geo_cases:
-        got = is_india_location(loc)
-        mark = "OK" if got == expected else "FAIL"
-        if got == expected:
-            ok += 1
-        else:
-            bad += 1
-        print(f"{mark:4}  expect={int(expected)} got={int(got)}  {loc!r}")
-
-    # --- digest metro buckets ---
-    metro_cases = [
-        ("Whitefield, Bengaluru", is_bengaluru_location, True),
-        ("Gachibowli, Hyderabad", is_hyderabad_location, True),
-        ("Sector 62, Noida",      is_ncr_location,       True),
-        ("Powai, Mumbai",         is_mumbai_location,    True),
-        ("Kharadi, Pune",         is_pune_location,      True),
-        ("Guindy, Chennai",       is_chennai_location,   True),
-        ("Jaipur, Rajasthan",     is_bengaluru_location, False),
-        ("Jaipur, Rajasthan",     is_ncr_location,       False),
-    ]
-    print("\n--- metro buckets ---")
-    for loc, fn, expected in metro_cases:
-        got = fn(loc)
-        mark = "OK" if got == expected else "FAIL"
-        if got == expected:
-            ok += 1
-        else:
-            bad += 1
-        print(f"{mark:4}  expect={int(expected)} got={int(got)}  "
-              f"{fn.__name__}({loc!r})")
-
-    print(f"\n{ok}/{ok + bad} passed")
-    return 0 if bad == 0 else 1
+def job(title, location, dept="", **extra):
+    return {"title": title, "location": location, "department": dept,
+            "posted_at": NOW, **extra}
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+# --- the full gate --------------------------------------------------------
+@pytest.mark.parametrize("title, location, dept, expected", [
+    # kept: student role, right track, right place
+    ("Software Engineer Intern", "Stockholm, Sweden", "Engineering", True),
+    ("Quantitative Researcher Intern", "London, United Kingdom", "", True),
+    ("Summer Analyst 2027 - Investment Banking", "Frankfurt, Germany", "", True),
+    ("Trading Intern", "Amsterdam, Netherlands", "", True),
+    ("Off-Cycle Internship - Global Markets", "London", "", True),
+    ("Machine Learning Intern", "Zurich, Switzerland", "", True),
+    ("Spring Insight Programme - Markets", "London, UK", "", True),
+    # dropped: wrong place
+    ("Software Engineer Intern", "San Francisco, CA", "Engineering", False),
+    ("Quant Trader Intern", "London, Ontario, Canada", "", False),
+    ("Software Engineer Intern", "Bengaluru, India", "", False),
+    # dropped: not a student role
+    ("Senior Software Engineer", "Stockholm, Sweden", "Engineering", False),
+    ("Quantitative Researcher", "London, United Kingdom", "", False),
+    # dropped: off-target function, even as an intern
+    ("HR Intern", "Stockholm, Sweden", "People", False),
+    ("Sales Intern", "Amsterdam, Netherlands", "Sales", False),
+])
+def test_passes(title, location, dept, expected):
+    assert passes(job(title, location, dept)) is expected
+
+
+def test_old_postings_are_dropped():
+    old = job("Software Engineer Intern", "Stockholm, Sweden")
+    old["posted_at"] = NOW - timedelta(days=10)
+    assert passes(old, max_age_days=3) is False
+
+
+def test_trusted_source_skips_role_checks():
+    # Jane Street's events board: every posting is a student event,
+    # so only location and age are checked.
+    event = job("FTTP Program 2027", "London, United Kingdom", _trust=True)
+    assert passes(event) is True
+    event["location"] = "New York, NY"
+    assert passes(event) is False
+
+
+def test_extra_location_tokens():
+    j = job("Software Engineer Intern", "Tbilisi, Georgia")
+    assert passes(j) is False
+    assert passes(j, extra_location_tokens=["Tbilisi"]) is True
+
+
+# --- location -------------------------------------------------------------
+@pytest.mark.parametrize("location, expected", [
+    ("Stockholm, Sweden", True),
+    ("Oslo, Norway", True),
+    ("Amsterdam", True),
+    ("London, United Kingdom", True),
+    ("Zürich, Switzerland", True),
+    ("Dublin, Ireland", True),
+    ("Paris, France", True),
+    ("London, Ontario, Canada", False),
+    ("Paris, TX", False),
+    ("New York, NY", False),
+    ("Singapore", False),
+    ("", False),
+])
+def test_is_target_location(location, expected):
+    assert is_target_location(location) is expected
+
+
+@pytest.mark.parametrize("fn, location, expected", [
+    (is_stockholm_location, "Kista, Stockholm", True),
+    (is_stockholm_location, "Oslo, Norway", False),
+    (is_nordic_location, "Copenhagen, Denmark", True),
+    (is_nordic_location, "Helsinki", True),
+    (is_amsterdam_location, "Rotterdam, Netherlands", True),
+    (is_london_location, "London", True),
+    (is_london_location, "Amsterdam", False),
+    (is_zurich_location, "Geneva, Switzerland", True),
+    (is_zurich_location, "", False),
+])
+def test_city_buckets(fn, location, expected):
+    assert fn(location) is expected
+
+
+# --- role level -----------------------------------------------------------
+@pytest.mark.parametrize("title, expected", [
+    ("Software Engineer Intern", True),
+    ("Summer Internship 2027", True),
+    ("IMC Launchpad", True),
+    ("SIG Discovery Day", True),
+    ("Visiting Associate", True),
+    ("Senior Software Engineer", False),
+    ("Internal Auditor", False),
+])
+def test_is_internship(title, expected):
+    assert is_internship(title) is expected
+
+
+@pytest.mark.parametrize("title, track", [
+    ("Quant Trader Intern", "Quant"),
+    ("Investment Banking Summer Analyst", "Finance/IB"),
+    ("Strategy Consultant Intern", "Consulting"),
+    ("Backend Software Engineer Intern", "Tech/SWE"),
+])
+def test_classify_track(title, track):
+    assert classify_track(title) == track
+
+
+@pytest.mark.parametrize("title, label", [
+    ("Off-Cycle Internship - Markets", "Off-cycle"),
+    ("Spring Week 2027", "Spring/Insight"),
+    ("Summer Analyst - Global Markets", "Summer analyst"),
+    ("Software Engineer Intern", "Internship"),
+    ("Graduate Programme 2027", "New grad"),
+    ("Campus Quant Trader (Full-Time)", "Grad/FT"),
+    ("Software Engineer", "Regular"),
+])
+def test_label_for(title, label):
+    assert label_for({"title": title}) == label
+
+
+def test_posted_within_keeps_postings_without_a_date():
+    assert posted_within({"posted_at": None}, 2) is True

@@ -466,7 +466,19 @@ def is_target_location(location: str, *,
     for country in NON_TARGET_VETO_COUNTRIES:
         if _word_in(loc, country):
             return False
+    # ...or if it ends in a US state code, like "Paris, TX".
+    if _US_STATE_SUFFIX.search(loc):
+        return False
     return True
+
+
+# Uppercase only, so lowercase country codes like "Vienna, at" don't match.
+# DE is left out because ATS boards use it for Germany ("Berlin, DE").
+_US_STATES = (
+    "AL AK AZ AR CA CO CT FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO "
+    "MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY"
+).split()
+_US_STATE_SUFFIX = re.compile(rf",\s*(?:{'|'.join(_US_STATES)})\s*$")
 
 
 def posted_within(job: dict, days: int) -> bool:
@@ -542,13 +554,15 @@ def label_for(job: dict) -> str:
         return "Spring/Insight"
     if "summer analyst" in low:
         return "Summer analyst"
+    # Grad schemes also count as student roles in is_internship(), so check
+    # them first or they'd all be labelled "Internship".
+    if "intern" not in low and any(k in low for k in (
+            "new grad", "new graduate", "graduate program", "graduate programme",
+            "grad program", "early career", "early-career", "university grad",
+            "campus hire")):
+        return "New grad"
     if is_internship(title):
         return "Internship"
-    if any(k in low for k in ("new grad", "new graduate", "graduate program",
-                              "graduate programme", "grad program",
-                              "early career", "early-career",
-                              "university grad", "campus hire")):
-        return "New grad"
     if _word_match(title, "graduate"):
         return "New grad"
     if any(_word_match(title, k) for k in
