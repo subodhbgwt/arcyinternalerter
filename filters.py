@@ -1,4 +1,4 @@
-"""Filter logic — retargeted for Subodh's search.
+"""Filter logic, retargeted for my search.
 
 Acceptance rule (applied in `passes`):
 
@@ -13,7 +13,7 @@ Acceptance rule (applied in `passes`):
 
 Internships & student programmes ONLY. Full-time roles (junior, new-grad,
 senior) are dropped. "Off-cycle", "spring week/insight", "summer analyst",
-"working student" and "industrial placement" ARE accepted — the finance and
+"working student" and "industrial placement" are accepted. The finance and
 consulting cycles use those labels instead of the word "intern".
 
 All matching is case-insensitive and word-boundary based, so "intern" does
@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 
 # --- Early-career / insight / student-programme synonyms -----------------
 # Banks, consultancies and big tech all brand their student-facing schemes
-# differently. Catch every synonym so none slip through — these count both as
+# differently. Catch every synonym so none slip through. These count both as
 # "this is a student programme" (internship gate) and "this is a wanted track"
 # (role gate), because an insight/off-cycle/spring/early-career scheme is
 # inherently something Subodh wants regardless of the function named.
@@ -51,13 +51,13 @@ EARLY_CAREER_TOKENS = [
     "discovery programme", "discovery program", "discovery day",
     "explore programme", "explore program", "exploration programme",
     "immersion programme", "immersion program", "experience programme",
-    # Graduate / trainee schemes (final-year entry — Subodh wants these too)
+    # Graduate / trainee schemes (final-year entry, I want these too)
     "graduate programme", "graduate program", "graduate scheme", "grad scheme",
     "graduate analyst", "trainee programme", "trainee program",
     # Scholarships / fellowships / cohort names
     "scholarship programme", "scholarship program", "scholars programme",
     "fellowship", "academy", "bootcamp",
-    # Diversity-led student events (NOT the vetoed HR "diversity" — these are
+    # Diversity-led student events (not the vetoed HR "diversity", these are
     # student pipelines) + year targeting
     "women in", "penultimate", "first-year", "first year", "sophomore",
     # Branded prop/quant early-career programmes & events (Jane Street, IMC,
@@ -83,7 +83,7 @@ DEFAULT_INTERN_TOKENS = EARLY_CAREER_TOKENS + [
     "harjoittelija", "harjoittelu",
     "apprentice", "apprenticeship",
     # Finance / consulting cycle labels (these are how banks & MBB name their
-    # student programmes — treat them as internships).
+    # student programmes, so treat them as internships).
     "off-cycle", "off cycle", "offcycle",
     "spring week", "spring insight", "spring programme", "spring program",
     "insight programme", "insight program", "insight day", "insight week",
@@ -106,7 +106,7 @@ INTERN_FALSE_POSITIVES = [
 # --- "Is this a role Subodh wants?" --------------------------------------
 # Four tracks. A posting is WANTED if it matches any track and isn't vetoed.
 
-# 1) Software / tech / data / ML — IC engineering.
+# 1) Software / tech / data / ML: IC engineering.
 TECH_TOKENS = [
     "engineer", "engineering", "developer", "software", "swe", "sde",
     "programmer", "fullstack", "full-stack", "full stack", "backend",
@@ -164,7 +164,7 @@ WANTED_TOKEN_GROUPS = [TECH_TOKENS, QUANT_TOKENS, FINANCE_TOKENS,
 
 # --- "Is this something to veto?" ----------------------------------------
 # NOTE: finance / consulting / business-analyst / BD are DELIBERATELY not
-# vetoed here — they're wanted tracks. Only clearly off-target functions.
+# vetoed here, they're wanted tracks. Only clearly off-target functions.
 NON_TECH_VETO_TOKENS = [
     # Recruiting / HR / People
     "recruiter", "recruiting", "talent acquisition", "talent partner",
@@ -432,7 +432,7 @@ def is_target_location(location: str, *,
     """True if the location clearly points at one of Subodh's target regions.
 
     Two-step, mirroring the original India gate but inverted to a whitelist:
-      (1) find a target hint — a target country, city, remote phrasing, or a
+      (1) find a target hint: a target country, city, remote phrasing, or a
           user-supplied extra token;
       (2) if a clearly non-target region is *also* named and no target
           country is explicitly present, drop it (kills "London, Ontario",
@@ -470,7 +470,7 @@ def is_target_location(location: str, *,
 
 
 def posted_within(job: dict, days: int) -> bool:
-    """True if posted within `days` days (or has no timestamp at all — we
+    """True if posted within `days` days (or has no timestamp at all, in which case we
     don't want to silently drop boards that omit dates)."""
     posted_at: datetime | None = job.get("posted_at")
     if posted_at is None:
@@ -491,7 +491,7 @@ def passes(
     dept = job.get("department", "") or ""
     location = job.get("location", "")
 
-    # Location gate — target regions only.
+    # Location gate: target regions only.
     if not is_target_location(location, extra_tokens=extra_location_tokens):
         return False
 
@@ -501,11 +501,11 @@ def passes(
 
     # Trusted source: a curated early-career/events board (e.g. Jane Street's
     # hidden-events board) where every posting is inherently a student event.
-    # Skip the role/internship gates — location + freshness already applied.
+    # Skip the role/internship gates. Location and freshness are already applied.
     if job.get("_trust"):
         return True
 
-    # HR / admin / legal / sales / support veto first — wins over everything.
+    # HR / admin / legal / sales / support veto first, it wins over everything.
     if is_non_tech(title, dept):
         return False
 

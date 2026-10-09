@@ -1,4 +1,4 @@
-"""Application factory — review-gated.
+"""Application factory. Prepares packets, never submits.
 
 For every row in job_tracker.xlsx marked Status = "Interested" that has no
 Materials yet, it prepares an application packet folder:
@@ -6,13 +6,13 @@ Materials yet, it prepares an application packet folder:
     applications/<Company>__<Role>/
         apply.txt          # role, link, and a submit checklist
         CV_<track>.pdf      # the right CV variant (finance/quant/tech), copied in
-        cover_letter.md     # a per-role brief + PENDING marker for Claude to fill
+        cover_letter.md     # a per-role brief + PENDING marker until the letter is written
 
 Then it writes the folder path into the tracker's Materials column and prints
-the queue of packets still needing a humanised cover letter.
+the packets that still need a cover letter.
 
 It deliberately does NOT submit anything. You review each packet and apply
-yourself — quality control matters at these firms (many have reapplication
+yourself. Quality control matters at these firms (many have reapplication
 cooldowns), and account/login/CAPTCHA steps aren't safe to automate.
 
 Usage:
@@ -42,7 +42,7 @@ CV_BY_TRACK = {
 }
 CV_DEFAULT = "fcurriculumvitae.pdf"
 
-PENDING = "<!-- LETTER PENDING — Claude fills this in -->"
+PENDING = "<!-- LETTER PENDING -->"
 
 
 def _slug(*parts: str) -> str:
@@ -85,9 +85,9 @@ def _write_packet(company, role, location, link, track, folder: Path) -> None:
     if src.exists():
         shutil.copy2(src, folder / f"CV_{track.replace('/', '-')}.pdf")
     else:
-        cv_note = f"(!) CV file not found: {src} — attach manually.\n"
+        cv_note = f"(!) CV file not found: {src}, attach it manually.\n"
 
-    # 2) apply.txt — link + checklist
+    # 2) apply.txt: link and checklist
     (folder / "apply.txt").write_text(
         f"COMPANY : {company}\n"
         f"ROLE    : {role}\n"
@@ -101,13 +101,13 @@ def _write_packet(company, role, location, link, track, folder: Path) -> None:
         "  [ ] Confirm work-authorisation answer (EU citizen / no sponsorship)\n"
         "  [ ] Check the deadline / that it's still open\n"
         "  [ ] Answer any 'why us' box (reuse the cover letter's middle para)\n"
-        "  [ ] Submit — then set Status = Applied in the tracker\n",
+        "  [ ] Submit, then set Status = Applied in the tracker\n",
         encoding="utf-8",
     )
 
-    # 3) cover_letter.md — brief + pending marker for Claude to fill
+    # 3) cover_letter.md: brief plus the pending marker
     (folder / "cover_letter.md").write_text(
-        f"# Cover letter — {company} · {role}\n\n"
+        f"# Cover letter: {company} · {role}\n\n"
         f"- Location: {location}\n"
         f"- Track: {track}\n"
         f"- Link: {link}\n\n"
@@ -156,7 +156,7 @@ def run(list_only: bool = False) -> int:
 
         folder = APPS_DIR / _slug(str(company), str(role))
         letter = folder / "cover_letter.md"
-        needs_letter = (not letter.exists()) or (PENDING in letter.read_text(encoding="utf-8"))
+        needs_letter = (not letter.exists()) or ("LETTER PENDING" in letter.read_text(encoding="utf-8"))
 
         if not list_only and not materials:
             _write_packet(company, role, location, link, track, folder)
@@ -171,15 +171,14 @@ def run(list_only: bool = False) -> int:
         try:
             wb.save(TRACKER)
         except PermissionError:
-            sys.exit(f"Couldn't save {TRACKER.name} — close it in Excel and re-run.")
+            sys.exit(f"Couldn't save {TRACKER.name}. Close it in Excel and run again.")
         print(f"Prepared {len(prepared)} packet(s): {', '.join(prepared) or '(none new)'}")
 
-    print(f"\n{len(pending)} packet(s) need a humanised cover letter:")
+    print(f"\n{len(pending)} packet(s) still need a cover letter:")
     for p in pending:
         print(f"  - {p['company']} · {p['role']}  [{p['track']}]  -> {p['folder']}")
     if pending:
-        print("\nAsk Claude: \"write the pending cover letters\" — it fills each "
-              "cover_letter.md using the humanize skill.")
+        print("\nWrite the letter in each cover_letter.md, then apply.")
     return 0
 
 

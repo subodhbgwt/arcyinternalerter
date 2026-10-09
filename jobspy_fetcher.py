@@ -39,7 +39,7 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
                 hours_old: int, max_results: int,
                 region: str = "Sweden",
                 search_term: str = "software engineer") -> list[dict]:
-    """Blocking — call via asyncio.to_thread. `region` is the search
+    """Blocking, call it via asyncio.to_thread. `region` is the search
     location; `search_term` lets finance/consulting firms search their own
     function (e.g. "analyst") instead of the tech default."""
     try:

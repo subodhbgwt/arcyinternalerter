@@ -1,6 +1,6 @@
 """Playwright-based fetchers for sites that genuinely need a real browser.
 
-Heavy and slow — uses headless Chromium. Only loaded if `USE_BROWSER=1` is
+Heavy and slow, uses headless Chromium. Only loaded if `USE_BROWSER=1` is
 set in the environment (or `--browser` is passed on the CLI). Daily-digest
 runs cost ~5-10 seconds per browser-fetched company, so we cap to the
 ~10 highest-value holdouts.
@@ -9,7 +9,7 @@ Strategy:
 
   1. Launch one Chromium process for the whole run.
   2. For each Workday tenant, navigate to the careers SPA, let it boot,
-     intercept the `/wday/cxs/.../jobs` XHR response — Workday's own SPA
+     intercept the `/wday/cxs/.../jobs` XHR response. Workday's own SPA
      fires it on init/search, so we piggyback on the auth tokens it already
      has from AWS Cognito.
   3. Normalize into the same job dict shape `ats.py` produces.
@@ -121,7 +121,7 @@ async def _fetch_workday_with_browser(
         except Exception:
             return
         captured.append(payload)
-        # Don't set done immediately — we want pages 2-4 too if they fire.
+        # Don't set done straight away, we want pages 2-4 too if they fire.
 
     page.on("response", lambda r: asyncio.create_task(on_response(r)))
 

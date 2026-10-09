@@ -10,7 +10,7 @@ import aiohttp
 
 log = logging.getLogger("arcy-alerter.notifier")
 
-_TG_MAX = 4000  # Telegram max is 4096 — leave a little headroom
+_TG_MAX = 4000  # Telegram max is 4096, leave some headroom
 
 
 async def _send_html(
@@ -57,7 +57,7 @@ async def send_job(
     url = job.get("url", "")
 
     parts = [
-        f"<b>{company}</b> — new role",
+        f"<b>{company}</b>: new role",
         f"<b>{title}</b>",
         f"📍 {location}",
     ]
@@ -108,7 +108,7 @@ def _age_label(posted_at) -> str:
 
 def _format_job_line(job: dict) -> str:
     title = html.escape(job.get("title", "?"))
-    location = html.escape(job.get("location", "") or "—")
+    location = html.escape(job.get("location", "") or "-")
     url = job.get("url", "")
     age = _age_label(job.get("posted_at"))
     label = job.get("_label", "")
@@ -130,7 +130,7 @@ def _build_digest_messages(jobs: list[dict], *, max_age_days: int) -> list[str]:
     """Return one or more HTML message bodies fitting Telegram's size cap.
 
     Sections, top to bottom (every job is in a target region by the time it
-    gets here — the split is by city):
+    gets here, the split is by city):
       • 🏙 STOCKHOLM
       • ❄️ NORDICS         (rest of Sweden + Norway / Denmark / Finland / Iceland)
       • 🌷 AMSTERDAM / NL
@@ -166,7 +166,7 @@ def _build_digest_messages(jobs: list[dict], *, max_age_days: int) -> list[str]:
     today = datetime.now(timezone.utc).strftime("%a %d %b %Y")
     n_companies = len({j.get("company", "?") for j in jobs})
     header = (
-        f"<b>🎯 Internship digest — {html.escape(today)}</b>\n"
+        f"<b>🎯 Internship digest, {html.escape(today)}</b>\n"
         f"{len(jobs)} new role(s) across {n_companies} compan(ies), "
         f"posted in the last {max_age_days} day(s)."
     )

@@ -2,7 +2,7 @@ $projectDir = 'C:\Users\Ijtihed\Documents\GitHub\arcyinternalerter'
 $pythonExe  = 'C:\Users\Ijtihed\AppData\Local\Programs\Python\Python313\python.exe'
 $taskName   = 'arcyinternalerter daily digest'
 
-# Daily fast path — no --jobspy, no --browser. The 16 JobSpy companies
+# Daily fast path: no --jobspy, no --browser. The 16 JobSpy companies
 # (Google, Meta, Tesla, ASML, Atlassian, Cisco, ServiceNow, Oracle,
 # Intel, Coinbase, Klarna, UiPath, Confluent, Arm, Broadcom, Qualcomm)
 # are skipped by default. Run manually with --jobspy when you want them.
@@ -11,7 +11,7 @@ $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument $cmd -WorkingDire
 
 $trigger = New-ScheduledTaskTrigger -Daily -At '09:00'
 
-# Allow more time — JobSpy adds ~2 minutes
+# Allow more time, JobSpy adds about 2 minutes
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -AllowStartIfOnBatteries `
@@ -32,10 +32,10 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal `
-    -Description "EU tech / SWE Telegram digest. Polls ~150 companies via direct ATS APIs. JobSpy companies (Google/Meta/Tesla/Atlassian/Cisco/Oracle/ServiceNow/ASML/Intel/Coinbase/Klarna/UiPath/Confluent/Arm/Broadcom/Qualcomm) are OPT-IN — run manually with --jobspy to include them."
+    -Description "EU tech / SWE Telegram digest. Polls ~150 companies via direct ATS APIs. JobSpy companies (Google/Meta/Tesla/Atlassian/Cisco/Oracle/ServiceNow/ASML/Intel/Coinbase/Klarna/UiPath/Confluent/Arm/Broadcom/Qualcomm) are opt-in, run manually with --jobspy to include them."
 
 Write-Host "`n--- Updated task ---" -ForegroundColor Cyan
 Get-ScheduledTask -TaskName $taskName | Select-Object TaskName, State, @{N='NextRun';E={(Get-ScheduledTaskInfo -TaskName $_.TaskName).NextRunTime}}, @{N='Action';E={($_.Actions | ForEach-Object { "$($_.Execute) $($_.Arguments)" }) -join '; '}} | Format-List
 
-Write-Host "Done — task updated to NOT include --jobspy." -ForegroundColor Green
+Write-Host "Done. Task updated to leave out --jobspy." -ForegroundColor Green
 Start-Sleep -Seconds 3  # brief pause so user can see the result before window closes

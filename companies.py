@@ -25,7 +25,7 @@ Supported ATS keys:
     teamtailor, snap, netflix, jobspy, recruitee, phenom
 
 Companies with `ats=None` either:
-  - need CSRF / Bearer auth (Google, Meta — CSRF-protected JSON APIs),
+  - need CSRF / Bearer auth (Google, Meta: CSRF-protected JSON APIs),
   - run on SAP SuccessFactors (Roche, Novartis, ABB, Nestlé, Bosch, Kone…),
   - run on Workday tenants that gate behind login or unknown slugs
     (Cisco, AMD, Atlassian, Snowflake, Oracle, Broadcom, Samsung, Nokia,
@@ -145,7 +145,7 @@ GLOBAL = [
     {"name": "Square Enix",           "ats": "workable",    "slug": "square-enix"},
     {"name": "Bandai Namco",          "ats": "greenhouse",  "slug": "bandainamco"},
     {"name": "SEGA",                  "ats": "workday",     "slug": "sega/3/SEGA_Careers"},
-    {"name": "Capcom",                "ats": None,          "slug": None},               # Jobvite — not supported
+    {"name": "Capcom",                "ats": None,          "slug": None},               # Jobvite, not supported
     {"name": "Activision Blizzard",   "ats": None,          "slug": None},              # now Microsoft
     {"name": "IO Interactive",        "ats": "teamtailor",  "slug": "io-interactive.teamtailor.com", "country": "DK"},
     {"name": "Paradox Interactive",   "ats": "teamtailor",  "slug": "career.paradoxplaza.com","country": "SE"},
@@ -301,16 +301,16 @@ SWITZERLAND = [
     {"name": "Nexthink",             "ats": "smartrecruiters","slug": "nexthink",              "country": "CH"},  # DEX platform, Lausanne
     {"name": "GetYourGuide",         "ats": "greenhouse", "slug": "getyourguide",              "country": "CH"},  # travel, Zurich/Berlin
     {"name": "Beekeeper",            "ats": "greenhouse", "slug": "beekeeper",                 "country": "CH"},  # frontline workforce SaaS
-    {"name": "Frontify",             "ats": "lever",      "slug": "frontify",                  "country": "CH"},  # brand mgmt, Basel — moved from Greenhouse
-    {"name": "Yokoy",                "ats": "lever",      "slug": "yokoy",                     "country": "CH"},  # AI expense mgmt, Zurich — moved from Greenhouse
+    {"name": "Frontify",             "ats": "lever",      "slug": "frontify",                  "country": "CH"},  # brand mgmt, Basel. Moved from Greenhouse
+    {"name": "Yokoy",                "ats": "lever",      "slug": "yokoy",                     "country": "CH"},  # AI expense mgmt, Zurich. Moved from Greenhouse
     {"name": "Sophia Genetics",      "ats": "workable",   "slug": "sophia-genetics",           "country": "CH"},  # AI genomics, Lausanne
     {"name": "Proton",               "ats": "greenhouse", "slug": "proton",                    "country": "CH"},  # ProtonMail / VPN, Geneva
     {"name": "Temenos",              "ats": "workday",    "slug": "temenos/103/Temenoscareers","country": "CH"},
     {"name": "u-blox",               "ats": None,         "slug": None,                        "country": "CH"},  # IoT / positioning chips
     {"name": "Sensirion",            "ats": "greenhouse", "slug": "sensirion",                 "country": "CH"},  # flow & env sensors, ETH-adjacent
     {"name": "Endress+Hauser",       "ats": None,         "slug": None,                        "country": "CH"},  # industrial IoT / measurement
-    {"name": "Daedalean",            "ats": None,         "slug": None,                        "country": "CH"},  # avionics AI — board gone
-    {"name": "Pricehubble",          "ats": "workable",   "slug": "pricehubble",               "country": "CH"},  # real-estate analytics — moved from Greenhouse
+    {"name": "Daedalean",            "ats": None,         "slug": None,                        "country": "CH"},  # avionics AI, board gone
+    {"name": "Pricehubble",          "ats": "workable",   "slug": "pricehubble",               "country": "CH"},  # real-estate analytics. Moved from Greenhouse
     {"name": "Unique Finance",       "ats": "ashby",      "slug": "unique",                    "country": "CH"},  # Swiss AI fintech
     # --- ETH / EPFL spin-offs & deep tech ---
     {"name": "ANYbotics",            "ats": "lever",      "slug": "anybotics",                 "country": "CH"},  # ETH spin-off, autonomous inspection robots
@@ -684,7 +684,7 @@ INDIA = [
     {"name": "Zoho",                 "ats": "jobspy",          "slug": "zoho",          "country": "IN"},
     {"name": "Freshworks",           "ats": "smartrecruiters", "slug": "freshworks",    "country": "IN"},  # 143 jobs
     # Postman is Indian-founded and belongs in this tier, but it is already
-    # wired in EXTRAS above (greenhouse:postman) — listing it twice would
+    # wired in EXTRAS above (greenhouse:postman), listing it twice would
     # fetch the same board twice, so the slot goes to Dream11 instead.
     {"name": "Dream11",              "ats": "jobspy",          "slug": "dream11",       "country": "IN"},
     {"name": "BrowserStack",         "ats": "jobspy",          "slug": "browserstack",  "country": "IN"},
@@ -764,7 +764,7 @@ INDIA_CORE = [
 # Rings, Old Mission, Radix, Virtu). This list only adds names that weren't in
 # the catalog. Banks and MBB run on Workday/own portals with no public JSON,
 # so they're ats=None (on record, skipped) until wired via a scraper or a
-# jobspy id — their off-cycle/insight roles you still track by hand.
+# jobspy id. Their off-cycle/insight roles you still track by hand.
 # Wired via jobspy (LinkedIn id where known as the numeric slug, otherwise a
 # name token that routes to Google Jobs). `jobspy_search` picks the function
 # to search (banks -> "analyst", MBB -> "consultant"), `jobspy_regions` the

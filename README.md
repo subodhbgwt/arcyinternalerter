@@ -31,7 +31,7 @@ It also recognises the branded student programmes that don't say "intern" in the
 One message per run, grouped by city:
 
 ```
-🎯 Internship digest — Wed 05 Aug 2026
+🎯 Internship digest, Wed 05 Aug 2026
 7 new role(s) across 5 compan(ies), posted in the last 2 day(s).
 
 ════ 🏙 STOCKHOLM ════

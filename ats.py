@@ -30,7 +30,7 @@ Companies on Workday-with-auth (Cisco, AMD, Atlassian, Snowflake, UiPath,
 Confluent, Arm, Qualcomm, ServiceNow, Oracle, Broadcom, Nokia, DJI, ASML,
 Vaisala), on Google / Meta CSRF-protected APIs, or on client-side-rendered
 TeamTailor / custom pages (ICEYE, Aiven, Klarna, Hoxhunt, Neko Health, …)
-need a real headless browser session — they're listed with ats=None.
+need a real headless browser session, so they're listed with ats=None.
 """
 from __future__ import annotations
 
@@ -257,7 +257,7 @@ _WD_POSTED_PATTERNS = [
 
 
 def _wd_parse_posted(text: str | None) -> datetime | None:
-    """Workday returns "Posted Today" / "Posted 3 Days Ago" — best effort."""
+    """Workday returns "Posted Today" / "Posted 3 Days Ago". Best effort."""
     if not text:
         return None
     now = datetime.now(timezone.utc)
@@ -277,7 +277,7 @@ def _wd_parse_posted(text: str | None) -> datetime | None:
 async def fetch_workday(session: aiohttp.ClientSession, slug: str) -> list[dict]:
     # Slug is "tenant/cluster/site" and may carry an optional 4th segment used
     # as a server-side searchText (e.g. "db/3/DBWebsite/intern") so big boards
-    # are narrowed before paging — otherwise the newest-80 slice buries the
+    # are narrowed before paging. Otherwise the newest-80 slice buries the
     # handful of intern roles among hundreds of unrelated postings.
     parts = slug.split("/")
     if len(parts) == 4:
@@ -378,7 +378,7 @@ async def fetch_amazon(session: aiohttp.ClientSession, _slug: str) -> list[dict]
 
 # --- Microsoft (apply.careers.microsoft.com pcsx) -------------------------
 # Public undocumented endpoint that the careers SPA hits. Returns positions
-# but with null posting dates — so we rely on state.json dedupe rather than
+# but with null posting dates, so we rely on state.json dedupe rather than
 # the freshness filter for MS roles.
 
 async def fetch_microsoft(session: aiohttp.ClientSession, _slug: str) -> list[dict]:
@@ -437,7 +437,7 @@ async def fetch_workable(session: aiohttp.ClientSession, slug: str) -> list[dict
     try:
         async with session.post(
             url,
-            json={},  # MUST be empty body — adding params returns "Not allowed".
+            json={},  # body must be empty, adding params returns "Not allowed".
             headers={
                 "User-Agent": "Mozilla/5.0",
                 "Accept": "application/json",
@@ -791,7 +791,7 @@ async def fetch_teamtailor(session: aiohttp.ClientSession,
         for block in items:
             f = _parse_tt_item(block)
             title = f.get("title") or ""
-            # Title sometimes is "Job Title - Department" — keep as-is.
+            # Title sometimes is "Job Title - Department". Keep it as is.
             link = f.get("link") or ""
             jid = link.rstrip("/").rsplit("/", 1)[-1] or title
             # Location often appears in <description> like "Helsinki" or
@@ -849,7 +849,7 @@ def _parse_rfc822(value: str | None) -> datetime | None:
     return None
 
 
-# --- Snap (careers.snap.com/api/jobs — Workday-backed but aggregated) ------
+# --- Snap (careers.snap.com/api/jobs, Workday-backed but aggregated) ------
 
 async def fetch_snap(session: aiohttp.ClientSession, _slug: str) -> list[dict]:
     """Snap exposes their full board via a single anonymous endpoint that

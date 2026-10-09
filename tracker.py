@@ -38,7 +38,7 @@ from filters import passes, label_for, is_internship
 from notifier import send_digest, send_job, send_text
 from state import SeenStore
 
-# Browser fetcher is optional — only imported if USE_BROWSER=1 / --browser.
+# Browser fetcher is optional, only imported if USE_BROWSER=1 / --browser.
 fetch_all_workday_browser = None  # type: ignore[assignment]
 
 ROOT = Path(__file__).parent
@@ -81,7 +81,7 @@ USE_JOBSPY = _clean(os.environ.get("USE_JOBSPY", "")) in ("1", "true", "True", "
 async def _fetch_all(session: aiohttp.ClientSession,
                      use_browser: bool = False,
                      use_jobspy: bool = False) -> list[dict]:
-    # Plain HTTP fetchers — high concurrency.
+    # Plain HTTP fetchers, high concurrency.
     plain_companies = [c for c in supported_companies()
                        if c.get("ats") not in ("workday_browser", "jobspy")]
     sem = asyncio.Semaphore(8)
@@ -157,7 +157,7 @@ async def cmd_verify(use_browser: bool = False) -> int:
         for company in supported_companies():
             if company["ats"] == "workday_browser" and not use_browser:
                 print(f"  ..  workday_browser  {company['slug']:<22} "
-                      f"{company['name']}  (skipped — set USE_BROWSER=1 or pass --browser)")
+                      f"{company['name']}  (skipped, set USE_BROWSER=1 or pass --browser)")
                 continue
             if company["ats"] == "workday_browser":
                 from browser_ats import fetch_workday_browser
@@ -213,7 +213,7 @@ async def cmd_digest(*, dry_run: bool, use_browser: bool,
         log.info("After track + region + %dd freshness filter: %d roles",
                  MAX_AGE_DAYS, len(matches))
 
-        # Dedupe against state — we keep this so a posting that was in
+        # Dedupe against state. We keep this so a posting that was in
         # yesterday's digest doesn't repeat in today's. The 3-day window only
         # acts as a safety net for missed runs.
         new_jobs: list[dict] = []
@@ -241,7 +241,7 @@ async def cmd_digest(*, dry_run: bool, use_browser: bool,
                 chat_id=TELEGRAM_CHAT_ID,
                 text=f"No new matching internships found today ({today}).",
             )
-            log.info("Nothing new — sent empty digest notification.")
+            log.info("Nothing new, sent an empty digest.")
             return 0
 
         # Append to the running Excel tracker (before send, so a Telegram
@@ -345,7 +345,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true",
                         help="Run + filter, but DON'T send Telegram. Print to stdout.")
     parser.add_argument("--no-filter", action="store_true",
-                        help="(legacy) skip every filter — dumps everything.")
+                        help="(legacy) skip every filter and dump everything.")
     parser.add_argument("--browser", action="store_true",
                         help="Also fetch the auth-gated Workday tenants "
                              "(Cisco, Atlassian, ServiceNow, …) using a "

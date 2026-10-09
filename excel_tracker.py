@@ -27,7 +27,7 @@ def _try_import():
         import openpyxl  # noqa: F401
         return True
     except ImportError:
-        log.warning("openpyxl not installed — Excel tracker skipped. "
+        log.warning("openpyxl not installed, skipping the Excel tracker. "
                     "Run: pip install openpyxl")
         return False
 
@@ -57,7 +57,7 @@ def append_jobs(jobs: list[dict], path: str | Path) -> int:
             wb = load_workbook(path)
             ws = wb.active
         except Exception as exc:
-            log.warning("Couldn't open %s (%s) — is it open in Excel? "
+            log.warning("Couldn't open %s (%s). Is it open in Excel? "
                         "Skipping tracker write this run.", path.name, exc)
             return 0
     else:
@@ -116,7 +116,7 @@ def append_jobs(jobs: list[dict], path: str | Path) -> int:
     try:
         wb.save(path)
     except PermissionError:
-        log.warning("Couldn't save %s — it's open in Excel. "
+        log.warning("Couldn't save %s, it's open in Excel. "
                     "Close it; the next run will catch up.", path.name)
         return 0
     except Exception as exc:
