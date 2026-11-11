@@ -38,7 +38,8 @@ def _epoch(dt) -> datetime | None:
 def _scrape_one(company_name: str, linkedin_id: str | None,
                 hours_old: int, max_results: int,
                 region: str = "Sweden",
-                search_term: str = "software engineer") -> list[dict]:
+                search_term: str = "software engineer",
+                match_tokens: list[str] | None = None) -> list[dict]:
     """Blocking, call it via asyncio.to_thread. `region` is the search
     location; `search_term` lets finance/consulting firms search their own
     function (e.g. "analyst") instead of the tech default."""
@@ -48,10 +49,17 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
         log.warning("python-jobspy not installed. Run: pip install python-jobspy")
         return []
 
-    sites = ["linkedin"] if linkedin_id else ["google"]
+    # Google Jobs returned ~0 for every firm, so firms without a numeric
+    # LinkedIn id now use a LinkedIn keyword search on "<firm> <term>" and
+    # keep only rows whose company matches. Sweeps (company_name=None) search
+    # the term on its own and keep every company.
+    sites = ["linkedin"]
+    term = search_term
+    if not linkedin_id and company_name:
+        term = f"{company_name} {search_term}"
     kwargs = {
         "site_name": sites,
-        "search_term": search_term,
+        "search_term": term,
         "location": region,
         "results_wanted": max_results,
         "hours_old": hours_old,
@@ -63,12 +71,6 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
             kwargs["linkedin_company_ids"] = [int(linkedin_id)]
         except ValueError:
             pass
-    else:
-        where = region
-        kwargs["google_search_term"] = (
-            f'"{company_name}" {search_term} internship jobs {where} '
-            f"since {hours_old//24 or 1} days ago"
-        )
 
     try:
         df = scrape_jobs(**kwargs)
@@ -81,6 +83,10 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
 
     out: list[dict] = []
     for _, row in df.iterrows():
+        row_company = str(row.get("company") or "").strip()
+        if company_name and not linkedin_id and match_tokens:
+            if not any(t.lower() in row_company.lower() for t in match_tokens):
+                continue
         title = str(row.get("title") or "")
         location = str(row.get("location") or "")
         url = str(row.get("job_url") or row.get("job_url_direct") or "")
@@ -94,6 +100,7 @@ def _scrape_one(company_name: str, linkedin_id: str | None,
             "url": url,
             "department": "",
             "posted_at": posted,
+            "company": row_company,
         })
     return out
 
@@ -114,6 +121,8 @@ async def fetch_jobspy(company: dict, *, hours_old: int = 48,
     elif slug.isdigit():
         linkedin_id = slug
 
+    sweep = bool(company.get("sweep"))
+    match_tokens = company.get("jobspy_match") or [company_name.split()[0]]
     regions = company.get("jobspy_regions") or list(REGIONS)
     searches = company.get("jobspy_search") or ["software engineer"]
     if isinstance(searches, str):
@@ -129,8 +138,8 @@ async def fetch_jobspy(company: dict, *, hours_old: int = 48,
                 await asyncio.sleep(8)
             first = False
             batch = await asyncio.to_thread(
-                _scrape_one, company_name, linkedin_id, hours_old,
-                max_results, region, term,
+                _scrape_one, None if sweep else company_name, linkedin_id,
+                hours_old, max_results, region, term, match_tokens,
             )
             for j in batch:
                 if j["id"] in seen:
@@ -139,8 +148,10 @@ async def fetch_jobspy(company: dict, *, hours_old: int = 48,
                 jobs.append(j)
 
     for j in jobs:
-        j["company"] = company_name
+        if not (sweep and j.get("company")):
+            j["company"] = company_name
         j["company_country"] = company.get("country", "")
+        j["_max_age_days"] = max(1, hours_old // 24)
     return jobs
 
 

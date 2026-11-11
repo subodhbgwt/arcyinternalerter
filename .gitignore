@@ -7,3 +7,6 @@ state.json
 # Personal data — never publish
 job_tracker.xlsx
 applications/
+scout_seen.json
+scout_finds.json
+logs/

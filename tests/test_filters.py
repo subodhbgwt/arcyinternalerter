@@ -41,7 +41,7 @@ def job(title, location, dept="", **extra):
     # kept: student role, right track, right place
     ("Software Engineer Intern", "Stockholm, Sweden", "Engineering", True),
     ("Quantitative Researcher Intern", "London, United Kingdom", "", True),
-    ("Summer Analyst 2027 - Investment Banking", "Frankfurt, Germany", "", True),
+    ("Summer Analyst 2027 - Investment Banking", "Frankfurt, Germany", "", False),  # classic IB hidden by default
     ("Trading Intern", "Amsterdam, Netherlands", "", True),
     ("Off-Cycle Internship - Global Markets", "London", "", True),
     ("Machine Learning Intern", "Zurich, Switzerland", "", True),
@@ -155,3 +155,55 @@ def test_label_for(title, label):
 
 def test_posted_within_keeps_postings_without_a_date():
     assert posted_within({"posted_at": None}, 2) is True
+
+
+# --- Swedish roles, events, grad schemes (Nov 2026) -----------------------
+@pytest.mark.parametrize("title, expected", [
+    ("Cooking with Consulting - Student event 2026", True),
+    ("Case evening with Bain Stockholm", True),
+    ("Studentkväll hos Handelsbanken", True),
+    ("Internship | Strategy&", True),
+    ("Interns to M&A Transaction Services (Stockholm) - Spring/ Fall 2027", False),
+    ("Handelsbanken Investment Banking Internship - Debt Advisory", False),
+    ("Intern, Private Equity Performance Improvement - 2027", True),
+    ("Quantitative Analyst Intern, XVA", True),
+    ("Data Science Intern - Summer 2027", True),
+    ("Utvecklare på praktik: systemintegration och automation", True),
+    ("Senior Insight Manager Innovation and Product Testing", False),
+    ("Volvo Group Graduate Program 2027 - Data Analyst", False),
+    ("Summer Internship - Deloitte Tax & Legal 2027 (Stockholm)", False),
+    ("Praktik snickare", False),
+    ("Bar, event och serveringspersonal", False),
+])
+def test_swedish_and_event_roles(title, expected):
+    assert passes(job(title, "Stockholm, Sweden"), max_age_days=3) is expected
+
+
+def test_event_label():
+    assert label_for(job("Case evening with Bain", "Stockholm")) == "Event"
+
+
+def test_source_can_widen_age_window():
+    old = job("Internship | Strategy&", "Stockholm, Sweden",
+              posted_at=NOW - timedelta(days=40))
+    assert passes(old, max_age_days=2) is False
+    old["_max_age_days"] = 60
+    assert passes(old, max_age_days=2) is True
+
+
+def test_swedish_intern_meaning_internal_is_dropped():
+    t = "Examensarbete: chatbotar och RAG-system för intern kunskapshantering"
+    assert passes(job(t, "Stockholm, Sweden"), max_age_days=3) is False
+
+
+def test_classic_ib_comes_back_with_flag(monkeypatch):
+    import filters
+    t = job("Summer Analyst 2027 - Investment Banking", "London, UK")
+    assert passes(t, max_age_days=3) is False
+    monkeypatch.setattr(filters, "INCLUDE_IB", True)
+    assert filters.passes(t, max_age_days=3) is True
+
+
+def test_data_track():
+    assert classify_track("Data Scientist Intern") == "Data/ML"
+    assert classify_track("Quant Researcher Intern") == "Quant"

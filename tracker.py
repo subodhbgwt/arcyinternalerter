@@ -69,6 +69,8 @@ DIGEST_INTERVAL_HOURS = float(
     _clean(os.environ.get("DIGEST_INTERVAL_HOURS", "")) or "24"
 )
 MAX_AGE_DAYS = int(_clean(os.environ.get("MAX_AGE_DAYS", "")) or "2")
+# The LinkedIn sweep runs weekly, so it looks back a full week (plus a day).
+JOBSPY_MAX_AGE_DAYS = int(_clean(os.environ.get("JOBSPY_MAX_AGE_DAYS", "")) or "8")
 STATE_FILE = ROOT / (_clean(os.environ.get("STATE_FILE", "")) or "state.json")
 TRACKER_FILE = ROOT / (_clean(os.environ.get("TRACKER_FILE", "")) or "job_tracker.xlsx")
 EXTRA_LOC = _csv(_clean(os.environ.get("EXTRA_LOCATIONS", "")
@@ -132,7 +134,7 @@ async def _fetch_all(session: aiohttp.ClientSession,
                      len(jobspy_companies))
             for c in jobspy_companies:
                 try:
-                    jobs = await fetch_jobspy(c, hours_old=MAX_AGE_DAYS * 24)
+                    jobs = await fetch_jobspy(c, hours_old=JOBSPY_MAX_AGE_DAYS * 24)
                     out.extend(jobs)
                     log.info("  %s -> %d jobs", c["name"], len(jobs))
                 except Exception as exc:
@@ -146,7 +148,11 @@ async def _fetch_all(session: aiohttp.ClientSession,
         log.info("Skipping %d JobSpy boards (set USE_JOBSPY=1 to enable)",
                  len(jobspy_companies))
 
-    return out
+    # The same posting can come from several searches; keep the first.
+    unique: dict[str, dict] = {}
+    for j in out:
+        unique.setdefault(j.get("id") or j.get("url") or j.get("title"), j)
+    return list(unique.values())
 
 
 # --- verify ---------------------------------------------------------------

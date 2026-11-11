@@ -24,7 +24,9 @@ It also recognises the branded student programmes that don't say "intern" in the
 - Public ATS APIs: Greenhouse, Lever, Ashby, SmartRecruiters and Workday. That covers the prop shops (Jane Street, IMC, HRT, Optiver, Two Sigma, DRW, Citadel, G-Research, Five Rings and others) plus a long list of European tech companies.
 - The banks' own Workday boards: Deutsche Bank, Morgan Stanley, Barclays and Citi. The search is narrowed to student roles on their side, so the few internships aren't buried among 700 to 2000 postings.
 - Jane Street's events board, marked as trusted, so every student event comes through and only the location filter applies.
-- JobSpy (`--jobspy`) for firms without a public board, mainly banks and the consulting firms. It searches LinkedIn and Google Jobs with a search term and set of regions per firm, such as "analyst" for banks and "consultant" for consulting.
+- Swedish job boards through [JobTech Links](https://links.api.jobtechdev.se) (Arbetsförmedlingen's free aggregator of Teamtailor, Jobylon, Varbi, studentjob.se and company pages). It runs every day with about 20 student searches in English and Swedish, and keeps Stockholm-area ads only. This is where most Swedish roles come from: Strategy&, Big 4 M&A, Handelsbanken, Goldman Stockholm, Triton, eEquity and so on.
+- JobSpy (`--jobspy`, weekly) runs one broad LinkedIn sweep for Stockholm, plus LinkedIn searches by company id for big tech and a few banks. LinkedIn's guest search ignores company names, so there are no per-firm searches for Swedish firms. The sweep looks back 8 days (`JOBSPY_MAX_AGE_DAYS`).
+- A weekly scout (`SCOUT.md` + `scout_add.py`) for what no API has: MBB and bank networking events, case nights, talent programmes and UK spring weeks. A scheduled Claude task reads the firms' pages and trackers, then `scout_add.py` adds the finds to the tracker and sends one Telegram message.
 
 ## The Telegram message
 

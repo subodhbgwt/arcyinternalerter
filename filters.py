@@ -68,6 +68,18 @@ EARLY_CAREER_TOKENS = [
     "trading challenge", "trading program", "trading programme",
     "trading academy", "quant challenge", "coding challenge", "open day",
     "discovery day", "discovery program", "discovery programme",
+    # Recruiting / networking events (Swedish firms and MBB run lots of these)
+    "student event", "student evening", "student day", "student night",
+    "networking event", "networking evening", "networking session",
+    "case evening", "case night", "case day", "case workshop",
+    "case competition", "case challenge", "case event", "case interview workshop",
+    "info session", "information session", "office visit", "meet us",
+    "career event", "recruitment event", "dinner event", "breakfast event",
+    "studentkväll", "studentevent", "casekväll", "case-kväll",
+    "nätverksträff", "studentdag", "frukostseminarium",
+    # Swedish student programme labels
+    "sommarpraktik", "sommarpraktikant", "praktikprogram",
+    "traineeprogram", "student consulting program", "nextgen",
 ]
 
 # --- "Is this an internship / student programme?" ------------------------
@@ -100,6 +112,10 @@ INTERN_FALSE_POSITIVES = [
     "graduate program manager", "graduate programme manager",
     "head of early career", "director of early career",
     "trainee manager", "trainee program manager",
+    # Theses aren't internships (his are VT27 and 2029, already sorted), and
+    # Swedish "intern" means "internal" in these.
+    "examensarbete", "exjobb", "master thesis", "thesis worker",
+    "intern kommunikation", "intern kunskap",
 ]
 
 
@@ -123,6 +139,19 @@ TECH_TOKENS = [
     # Product management (Subodh is open to APM/PM student roles)
     "product manager", "product management", "product owner",
     "associate product manager", "product management intern",
+    "utvecklare", "systemutvecklare", "mjukvaruutvecklare", "ingenjör",
+    "dataanalytiker", "analytiker",
+]
+
+# 1b) Data science / ML / analytics. Kept separate so the tracker can show it.
+DATA_TOKENS = [
+    "data science", "data scientist", "data analyst", "data analytics",
+    "analytics", "machine learning", "ml", "mle", "ai", "deep learning",
+    "statistics", "statistician", "statistical", "operations research",
+    "optimisation", "optimization", "mathematical", "mathematics",
+    "econometric", "forecasting", "decision science", "applied scientist",
+    "research scientist", "computer vision", "nlp", "llm",
+    "datavetenskap", "dataanalys", "maskininlärning",
 ]
 
 # 2) Quant / trading.
@@ -132,6 +161,8 @@ QUANT_TOKENS = [
     "quant trading", "quant research", "systematic", "algorithmic",
     "algo trading", "trader", "trading", "market maker", "market making",
     "market-making", "execution", "low latency", "low-latency",
+    "xva", "quantitative analyst", "quant analyst", "risk modelling",
+    "risk modeling", "derivatives", "pricing", "kvantitativ", "kvant",
 ]
 
 # 3) Investment banking / finance / markets.
@@ -143,14 +174,19 @@ FINANCE_TOKENS = [
     "capital markets", "leveraged finance", "restructuring",
     "investment analyst", "financial engineering", "structured finance",
     "sustainable finance", "credit", "coverage", "advisory",
-    "portfolio", "risk", "actuar",
+    "portfolio", "risk", "actuar", "debt advisory", "ecm", "dcm",
+    "investment", "venture capital", "growth equity",
+    "corporate banking", "kapitalförvaltning", "investeringar", "finansanalytiker",
 ]
 
 # 4) Consulting / strategy.
 CONSULTING_TOKENS = [
     "consultant", "consulting", "business analyst", "associate consultant",
     "strategy consultant", "management consult", "strategy&", "strategy &",
-    "generalist consultant",
+    "generalist consultant", "strategy", "strategy intern",
+    "performance improvement",
+    "management consulting", "corporate development",
+    "managementkonsult", "strategikonsult", "konsult", "verksamhetskonsult",
 ]
 
 # 5) Programme labels that are inherently a wanted student/early-career
@@ -158,7 +194,7 @@ CONSULTING_TOKENS = [
 # "Insight Day", "Early Careers Programme", "Graduate Scheme").
 PROGRAMME_TOKENS = EARLY_CAREER_TOKENS
 
-WANTED_TOKEN_GROUPS = [TECH_TOKENS, QUANT_TOKENS, FINANCE_TOKENS,
+WANTED_TOKEN_GROUPS = [TECH_TOKENS, DATA_TOKENS, QUANT_TOKENS, FINANCE_TOKENS,
                        CONSULTING_TOKENS, PROGRAMME_TOKENS]
 
 
@@ -224,6 +260,13 @@ NON_TECH_VETO_TOKENS = [
     "data center technician", "cable install", "loss prevention",
     "physical security", "safety specialist", "manufacturing engineer",
     "operations technician", "sicherheitstechniker", "elektroniker",
+    # Swedish off-target titles
+    "redovisning", "ekonomiassistent", "lönekonsult", "kundtjänst",
+    "kundservice", "säljare", "försäljning", "marknadsföring",
+    "kommunikation", "kommunikatör", "rekrytering", "rekryterare",
+    "snickare", "bygg", "anläggning", "kock", "servering", "sjuksköterska",
+    "lärare", "veterinär", "tekniker", "elektriker", "lager", "chaufför",
+    "event staff", "eventpersonal", "barista", "tax & legal", "tax",
 ]
 
 
@@ -377,6 +420,8 @@ def classify_track(title: str, dept: str = "") -> str:
         return "Finance/IB"
     if _any_word_match(blob, CONSULTING_TOKENS):
         return "Consulting"
+    if _any_word_match(blob, DATA_TOKENS):
+        return "Data/ML"
     if _any_word_match(blob, TECH_TOKENS):
         return "Tech/SWE"
     return "Programme"
@@ -507,8 +552,8 @@ def passes(
     if not is_target_location(location, extra_tokens=extra_location_tokens):
         return False
 
-    # Freshness gate
-    if not posted_within(job, max_age_days):
+    # Freshness gate (a source can widen it, e.g. JobTech's bulk imports)
+    if not posted_within(job, job.get("_max_age_days") or max_age_days):
         return False
 
     # Trusted source: a curated early-career/events board (e.g. Jane Street's
@@ -526,7 +571,50 @@ def passes(
         return False
 
     # Internships / student programmes ONLY.
-    return is_internship(title, intern_tokens=intern_tokens)
+    if not is_internship(title, intern_tokens=intern_tokens):
+        return False
+
+    # Senior titles that only matched on a word like "insight".
+    if is_senior(title) and not _any_word_match(title, _STUDENT_WORDS):
+        return False
+
+    # Classic IB / M&A / PE recruit almost only from SSE, so they're hidden
+    # unless INCLUDE_IB=1. Quant, markets, risk, data and consulting stay.
+    if not INCLUDE_IB and is_classic_ib(title, dept):
+        return False
+
+    # Graduate schemes start after graduation (his is 2029), so skip them
+    # unless INCLUDE_GRAD=1.
+    if not INCLUDE_GRAD and label_for(job) == "New grad":
+        return False
+    return True
+
+
+_STUDENT_WORDS = ["intern", "internship", "praktik", "praktikant", "student",
+                  "trainee", "summer", "spring", "off-cycle", "insight day",
+                  "insight week", "insight programme", "insight program"]
+CLASSIC_IB_TOKENS = [
+    "investment banking", "investment bank", "ibd", "m&a", "mergers",
+    "corporate finance", "transaction services", "deal advisory", "deals",
+    "private equity", "debt advisory", "ecm", "dcm", "leveraged finance",
+    "restructuring", "valuation", "growth equity", "venture capital",
+    "equity research", "wealth management", "private wealth",
+    "corporate banking", "investment analyst", "coverage",
+]
+
+
+def is_classic_ib(title: str, dept: str = "") -> bool:
+    blob = f"{title} || {dept}"
+    if not _any_word_match(blob, CLASSIC_IB_TOKENS):
+        return False
+    # Keep it if it's really a quant / tech / data / consulting role.
+    return not any(_any_word_match(blob, g) for g in
+                   (QUANT_TOKENS, DATA_TOKENS, CONSULTING_TOKENS,
+                    ["engineer", "engineering", "developer", "software"]))
+
+
+INCLUDE_IB = __import__("os").environ.get("INCLUDE_IB", "").strip() in ("1", "true", "yes")
+INCLUDE_GRAD = __import__("os").environ.get("INCLUDE_GRAD", "").strip() in ("1", "true", "yes")
 
 
 _ROLE_NOUN = r"engineer|developer|programmer|designer|scientist|analyst|researcher|architect|sde|swe|trader|consultant"
@@ -538,6 +626,15 @@ _JR_LEVEL_PATTERNS = [
 ]
 
 
+EVENT_LABEL_TOKENS = (
+    "event", "evening", "night", "kväll", "workshop", "info session",
+    "information session", "office visit", "meet us", "case competition",
+    "case challenge", "case day", "breakfast", "dinner", "nätverk",
+    "networking", "open day", "discovery day", "insight day", "seminar",
+    "estimathon", "hackathon",
+)
+
+
 def label_for(job: dict) -> str:
     """Short label to show in the digest (Internship / Off-cycle / Spring /
     Summer analyst / Grad / Junior / Regular)."""
@@ -547,6 +644,8 @@ def label_for(job: dict) -> str:
     # "Campus Quant Trader (Full-Time)" isn't mislabelled as an internship.
     if ("full-time" in low or "full time" in low) and "intern" not in low:
         return "Grad/FT"
+    if any(k in low for k in EVENT_LABEL_TOKENS):
+        return "Event"
     if any(k in low for k in ("off-cycle", "off cycle", "offcycle")):
         return "Off-cycle"
     if any(k in low for k in ("spring week", "spring insight", "spring programme",

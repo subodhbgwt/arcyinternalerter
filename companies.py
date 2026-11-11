@@ -792,9 +792,9 @@ FINANCE_QUANT = [
      "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
     {"name": "Tower Research Capital",  "ats": "jobspy", "slug": "tower-research-capital","country": "UK",
      "jobspy_search": ["intern"], "jobspy_regions": ["United Kingdom"]},
-    {"name": "Wincent",                "ats": "jobspy", "slug": "wincent",     "country": "SE",
+    {"name": "Wincent",                "ats": None, "slug": "wincent",     "country": "SE",
      "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
-    {"name": "Lynx Asset Management",  "ats": "jobspy", "slug": "lynx-asset-management","country": "SE",
+    {"name": "Lynx Asset Management",  "ats": None, "slug": "lynx-asset-management","country": "SE",
      "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
     # --- bulge-bracket / banks (off-cycle + summer analyst in EU) ---
     {"name": "J.P. Morgan",            "ats": "jobspy", "slug": "1067",        "country": "UK",
@@ -807,28 +807,48 @@ FINANCE_QUANT = [
     {"name": "Deutsche Bank",          "ats": "workday", "slug": "db/3/DBWebsite/intern", "country": "DE"},
     {"name": "UBS",                    "ats": "jobspy", "slug": "ubs",         "country": "CH",
      "jobspy_search": ["analyst"], "jobspy_regions": ["Switzerland", "United Kingdom"]},
-    {"name": "SEB",                    "ats": "jobspy", "slug": "seb",         "country": "SE",
+    {"name": "SEB",                    "ats": None, "slug": "seb",         "country": "SE",
      "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
-    {"name": "Handelsbanken",          "ats": "jobspy", "slug": "handelsbanken","country": "SE",
+    {"name": "Handelsbanken",          "ats": None, "slug": "handelsbanken","country": "SE",
      "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
-    {"name": "Nordea",                 "ats": "jobspy", "slug": "nordea",      "country": "SE",
+    {"name": "Nordea",                 "ats": None, "slug": "nordea",      "country": "SE",
      "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
-    {"name": "Carnegie Investment Bank","ats": "jobspy","slug": "carnegie",    "country": "SE",
+    {"name": "Carnegie Investment Bank","ats": None,"slug": "carnegie",    "country": "SE",
      "jobspy_search": ["intern"], "jobspy_regions": ["Sweden"]},
-    # --- consulting ---
-    {"name": "McKinsey & Company",     "ats": "jobspy", "slug": "mckinsey",    "country": "SE",
-     "jobspy_search": ["business analyst"], "jobspy_regions": ["Sweden", "United Kingdom"]},
-    {"name": "Boston Consulting Group","ats": "jobspy", "slug": "boston-consulting-group","country": "SE",
-     "jobspy_search": ["associate", "visiting associate", "platinion"], "jobspy_regions": ["Sweden"]},
-    {"name": "Bain & Company",         "ats": "jobspy", "slug": "bain-and-company","country": "SE",
-     "jobspy_search": ["associate consultant"], "jobspy_regions": ["Sweden"]},
+    # --- consulting --- (ats None: covered by the Stockholm sweep, JobTech
+    # and the weekly events/MBB scout; their LinkedIn searches found nothing)
+    {"name": "McKinsey & Company",     "ats": None, "slug": "mckinsey",    "country": "SE",
+     "jobspy_search": ["intern", "business analyst"], "jobspy_regions": ["Sweden", "United Kingdom"]},
+    {"name": "Boston Consulting Group","ats": None, "slug": "boston-consulting-group","country": "SE",
+     "jobspy_search": ["intern", "visiting associate", "platinion"], "jobspy_regions": ["Sweden"],
+     "jobspy_match": ["Boston Consulting", "BCG"]},
+    {"name": "Bain & Company",         "ats": None, "slug": "bain-and-company","country": "SE",
+     "jobspy_search": ["associate consultant intern", "intern"], "jobspy_regions": ["Sweden"]},
+    # --- keyword sweep (any company). LinkedIn's guest search ignores the
+    # firm name, so per-firm searches for Swedish firms just return generic
+    # "intern in Sweden" results. One broad Stockholm sweep catches them all.
+    {"name": "LinkedIn sweep: Stockholm", "ats": "jobspy", "slug": "sweep",
+     "country": "SE", "sweep": True,
+     "jobspy_search": ["intern", "internship", "summer internship",
+                       "praktikant", "trainee", "consulting intern",
+                       "strategy intern", "quant intern", "trading intern",
+                       "data science intern", "machine learning intern",
+                       "data analyst intern", "software engineer intern",
+                       "student"],
+     "jobspy_regions": ["Stockholm, Sweden"]},
+]
+
+# --- Swedish job boards via JobTech Links (daily, no key needed) ---------
+SWEDEN_BOARDS = [
+    {"name": "Swedish job boards (JobTech)", "ats": "jobtech", "slug": "default",
+     "country": "SE"},
 ]
 
 
 def all_companies() -> list[dict]:
     out: list[dict] = []
     for c in (GLOBAL + GLOBAL_EU_BIASED + FINLAND + SWITZERLAND + EU_SCALEUPS
-              + EXTRAS + FINANCE_QUANT):
+              + EXTRAS + FINANCE_QUANT + SWEDEN_BOARDS):
         c.setdefault("country", "")
         out.append(c)
     return out

@@ -918,6 +918,81 @@ async def fetch_netflix(session: aiohttp.ClientSession, _slug: str) -> list[dict
     return out
 
 
+# --- JobTech Links (Arbetsförmedlingen) ----------------------------------
+# Free public API that collects ads from most Swedish job sites (Teamtailor,
+# Jobylon, Varbi, studentjob.se, company pages...). One "company" entry runs
+# a set of student-role searches; each hit keeps its real employer name.
+# Slug = comma-separated extra queries ("default" for none).
+
+JOBTECH_URL = "https://links.api.jobtechdev.se/joblinks"
+JOBTECH_QUERIES = [
+    "internship", "intern", "summer internship", "summer intern",
+    "praktik", "praktikant", "sommarpraktik", "trainee", "graduate",
+    "spring internship", "off-cycle", "insight", "student event",
+    "student program", "case", "consulting intern", "strategy",
+    "analyst intern", "quant",
+    "software engineer intern",
+    # quant and data science
+    "quantitative", "kvantitativ", "risk intern", "XVA", "trading intern",
+    "data science", "data scientist", "machine learning", "AI intern",
+    "data analyst intern", "analytics intern", "statistics",
+]
+# Ads imported in bulk keep an old publication date, so this source uses a
+# wider window. state.json still stops repeats.
+JOBTECH_MAX_AGE_DAYS = 60
+# He lives in Stockholm, so only Stockholm-area ads (or ones with no city).
+JOBTECH_CITIES = {
+    "stockholm", "solna", "sundbyberg", "nacka", "danderyd", "lidingö",
+    "huddinge", "täby", "sollentuna", "järfälla", "bromma", "kista",
+    "upplands väsby", "sigtuna", "botkyrka", "haninge", "tyresö", "värmdö",
+    "stockholms län",
+}
+
+
+async def fetch_jobtech(session: aiohttp.ClientSession, slug: str) -> list[dict]:
+    queries = JOBTECH_QUERIES + [q.strip() for q in (slug or "").split(",")
+                                 if q.strip() and q.strip() != "default"]
+    seen: dict[str, dict] = {}
+    for q in queries:
+        for offset in (0, 100, 200):
+            try:
+                async with session.get(
+                    JOBTECH_URL,
+                    params={"q": q, "limit": 100, "offset": offset},
+                    headers=_HEADERS, timeout=_DEFAULT_TIMEOUT,
+                ) as resp:
+                    if resp.status >= 400:
+                        log.warning("JobTech HTTP %s for %r", resp.status, q)
+                        break
+                    data = await resp.json(content_type=None)
+            except Exception as exc:
+                log.warning("JobTech error for %r: %s", q, exc)
+                break
+            hits = (data or {}).get("hits") or []
+            for h in hits:
+                hid = h.get("id")
+                if not hid or hid in seen:
+                    continue
+                addr = (h.get("workplace_addresses") or [{}])[0] or {}
+                city = addr.get("municipality") or addr.get("region") or ""
+                if city and city.lower() not in JOBTECH_CITIES:
+                    continue
+                links = h.get("source_links") or [{}]
+                seen[hid] = {
+                    "id": f"jobtech:{hid}",
+                    "title": (h.get("headline") or "").strip(),
+                    "location": f"{city}, Sweden" if city else "Sweden",
+                    "url": links[0].get("url") or "",
+                    "department": "",
+                    "posted_at": _parse_iso(h.get("publication_date")),
+                    "company": ((h.get("employer") or {}).get("name") or "").strip(),
+                    "_max_age_days": JOBTECH_MAX_AGE_DAYS,
+                }
+            if len(hits) < 100:
+                break
+    return list(seen.values())
+
+
 # --- dispatch --------------------------------------------------------------
 
 FETCHERS = {
@@ -939,6 +1014,7 @@ FETCHERS = {
     "netflix":         fetch_netflix,
     "recruitee":       fetch_recruitee,
     "phenom":          fetch_phenom,
+    "jobtech":         fetch_jobtech,
 }
 
 
@@ -952,6 +1028,7 @@ async def fetch_company(session: aiohttp.ClientSession, company: dict) -> list[d
         return []
     jobs = await fetcher(session, slug)
     for j in jobs:
-        j["company"] = name
+        if not j.get("company"):
+            j["company"] = name
         j["company_country"] = company.get("country", "")
     return jobs

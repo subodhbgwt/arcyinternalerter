@@ -94,7 +94,7 @@ def append_jobs(jobs: list[dict], path: str | Path) -> int:
             jid, today,
             j.get("company", ""), j.get("title", ""), j.get("location", ""),
             j.get("_label", ""), _classify(j), "New",
-            "apply", "", "",
+            "apply", "", j.get("_notes", ""),
         ])
         link_cell = ws.cell(row=ws.max_row, column=9)
         url = j.get("url", "")
