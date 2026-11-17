@@ -67,6 +67,26 @@ Spring weeks / insight (UK and EU):
   Deutsche Bank early-careers pages. At banks, prefer markets, quant,
   engineering and technology spring weeks over IBD-only ones.
 
+## Programme watchlist (flag the day they open)
+
+These are the ones he asked to be told about. When one of them opens, add it
+as a find with type "Programme" (or "Internship") and start the note with
+"OPENED:" so it stands out in the Telegram message.
+
+- EY Sweden: Consulting Summer Internship, Talent Training, Aster (with
+  EY-Parthenon). Expected December 2026.
+- Ericsson summer internship 2027, Business & Operations track (1 Dec 2026 –
+  24 Jan 2027). Also Ericsson SPP associate consultant intern (opens ~Sep).
+- BCG Emeralds, BCG +You and any BCG Sweden student programme or event.
+- McKinsey Sweden BA internship (second deadline around 5 Feb 2027), McKinsey
+  student weekends and programmes.
+- Bain Buddy / Bain Nordics student events and the next AC intern cycle.
+- If Insurance analyst summer internship (Jan–Feb 2027).
+- From the INDEK internship catalogue (next cycles mostly open Aug–Oct 2027):
+  Arkwright, Applied Value, OPX Partners, Roland Berger, Ericsson SPP,
+  Kearney, Oliver Wyman, Strategy&, Accenture Strategy, Visma (Sweden 2028
+  cycle). Flag any new student event from these firms too.
+
 ## Procedure
 
 1. Read `scout_seen.json` (links already sent) so you don't redo work.
