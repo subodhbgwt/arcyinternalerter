@@ -82,6 +82,11 @@ as a find with type "Programme" (or "Internship") and start the note with
   student weekends and programmes.
 - Bain Buddy / Bain Nordics student events and the next AC intern cycle.
 - If Insurance analyst summer internship (Jan–Feb 2027).
+- Swedbank Robur: he heard (Nov 2026) that Robur may take in 10–12 students
+  soon (student programme, internships or part-time). Check every run:
+  https://www.swedbank.com/about-swedbank/career.html, Swedbank's job list
+  (search "Robur", "student", "praktik", "sommarjobb", "trainee") and
+  LinkedIn "Swedbank Robur student". Flag anything new as OPENED.
 - From the INDEK internship catalogue (next cycles mostly open Aug–Oct 2027):
   Arkwright, Applied Value, OPX Partners, Roland Berger, Ericsson SPP,
   Kearney, Oliver Wyman, Strategy&, Accenture Strategy, Visma (Sweden 2028
