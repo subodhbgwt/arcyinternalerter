@@ -84,7 +84,7 @@ as a find with type "Programme" (or "Internship") and start the note with
 - If Insurance analyst summer internship (Jan–Feb 2027).
 - Swedbank Robur: he heard (Nov 2026) that Robur may take in 10–12 students
   soon (student programme, internships or part-time). Check every run:
-  https://www.swedbank.com/about-swedbank/career.html, Swedbank's job list
+  https://jobs.swedbank.com (Teamtailor) and https://www.swedbank.com/work-with-us/students-and-graduates.html. Last year the Robur Summer Internship (8 weeks, Jun–Jul) closed 16 Jan 2026, so expect the 2027 round Dec–Jan. Job list
   (search "Robur", "student", "praktik", "sommarjobb", "trainee") and
   LinkedIn "Swedbank Robur student". Flag anything new as OPENED.
 - From the INDEK internship catalogue (next cycles mostly open Aug–Oct 2027):
